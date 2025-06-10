@@ -1,0 +1,100 @@
+import os
+import runpy
+import datetime
+import platform
+import sys
+from contextlib import redirect_stdout, redirect_stderr
+import subprocess
+
+def get_cpu_name():
+    try:
+        output = subprocess.check_output(["wmic", "cpu", "get", "Name"], stderr=subprocess.DEVNULL, universal_newlines=True)
+        lines = output.strip().splitlines()
+        if len(lines) >= 2:
+            return lines[1].strip()
+    except Exception:
+        return platform.processor()
+    return platform.processor()
+
+def get_gpu_name():
+    try:
+        output = subprocess.check_output("wmic path win32_VideoController get Name",
+                                           shell=True,
+                                           stderr=subprocess.DEVNULL,
+                                           universal_newlines=True)
+        lines = output.strip().splitlines()
+        gpus = [line.strip() for line in lines[1:] if line.strip()]
+        return ", ".join(gpus) if gpus else "N/A"
+    except Exception:
+        return "N/A"
+
+def get_total_ram():
+    try:
+        output = subprocess.check_output("wmic ComputerSystem get TotalPhysicalMemory",
+                                           shell=True,
+                                           stderr=subprocess.DEVNULL,
+                                           universal_newlines=True)
+        lines = output.strip().splitlines()
+        if len(lines) >= 2:
+            total_ram_bytes = int(lines[1].strip())
+            total_ram_gb = total_ram_bytes / (1024**3)
+            return f"{total_ram_gb:.2f} GB"
+    except Exception:
+        return "N/A"
+    return "N/A"
+
+def main():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    scripts_dir = os.path.join(current_dir, 'scripts')
+    
+    # Hardcode the order of scripts here.
+    ipy_files = [
+        os.path.join(scripts_dir, 'clean.ipy'),
+        # Add more scripts in the desired order if needed.
+    ]
+    
+    # Create a log directory if it doesn't exist.
+    log_dir = os.path.join(current_dir, 'log')
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create a log file with a timestamp in its name.
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
+    
+    # Ask for user consent to collect debugging info.
+    consent_input = input("This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) for logging purposes. Do you consent? (y/N): ")
+    debug_consent = consent_input.strip().lower() == "y"
+    
+    # Redirect stdout and stderr to the log file while running each .ipy file.
+    with open(log_file_path, 'w') as log_file:
+        with redirect_stdout(log_file), redirect_stderr(log_file):
+            if debug_consent:
+                print("Debugging Information:")
+                print(f"Operating System: {platform.system()} {platform.release()}")
+                print(f"OS Version: {platform.version()}")
+                print(f"Machine: {platform.machine()}")
+                print(f"CPU: {get_cpu_name()}")
+                print(f"GPU: {get_gpu_name()}")
+                print(f"Total RAM: {get_total_ram()}")
+                print(f"Python Version: {sys.version}")
+                print("\n")
+            else:
+                print("User did not consent to collect debugging information.\n")
+            
+            # Run each .ipy file in the specified order and track runtime.
+            for ipy_file in ipy_files:
+                print(f"Running {ipy_file}...")
+                start_time = datetime.datetime.now()
+                try:
+                    runpy.run_path(ipy_file, run_name="__main__")
+                except Exception as e:
+                    print(f"Error running {ipy_file}: {e}")
+                end_time = datetime.datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                print(f"Finished {ipy_file} in {duration:.2f} seconds\n")
+    
+    # After execution is complete, inform the user of the log file location.
+    print(f"All scripts executed. Check log file: {log_file_path}")
+
+if __name__ == "__main__":
+    main()

@@ -1,3 +1,51 @@
 import pandas as pd
-unedited_data = pd.read_excel('dataset/Copy of Instagram_Analytics - DO NOT DELETE (for interview purposes).xlsx')
-print(unedited_data.head())
+
+def load_excel_sheets(file_path):
+    """
+    Reads an Excel file and returns a dictionary of DataFrames keyed by sheet name.
+    """
+    xl = pd.ExcelFile(file_path)
+    sheets_dict = {sheet: xl.parse(sheet) for sheet in xl.sheet_names}
+    return sheets_dict
+
+def check_sheet_duplicates(sheet_name, df):
+    """
+    Print duplicate details for the sheet using the 'RowHash' column.
+    """
+    print(f"Sheet: {sheet_name}")
+    if 'RowHash' not in df.columns:
+        print("Column 'RowHash' not found in this sheet.\n")
+        return
+
+    duplicate_count = df.duplicated(subset='RowHash', keep='first').sum()
+    print(f"Total duplicate entries in 'RowHash': {duplicate_count}")
+    
+    duplicates = df[df.duplicated(subset='RowHash', keep=False)]
+    if duplicates.empty:
+        print("No duplicate rows found.\n")
+        return
+
+    grouped = duplicates.groupby('RowHash')
+    for rowhash, group in grouped:
+        if len(group) > 1:
+            first_row = group.iloc[0].drop('RowHash')
+            identical = True
+            for _, row in group.iloc[1:].iterrows():
+                if not row.drop('RowHash').equals(first_row):
+                    identical = False
+                    break
+            if identical:
+                print(f"Identical duplicates found for RowHash: {rowhash}")
+            else:
+                print(f"Non-identical duplicates found for RowHash: {rowhash}")
+                print(group)
+    print("\n")
+
+excel_file = 'dataset/Copy of Instagram_Analytics - DO NOT DELETE (for interview purposes).xlsx'
+excel_sheets = load_excel_sheets(excel_file)
+excel_sheets.pop('SupermetricsQueries', None)
+
+for sheet_name, df in excel_sheets.items():
+    check_sheet_duplicates(sheet_name, df)
+
+
