@@ -1,0 +1,4 @@
+# Ignoring the dataset folder to avoid publishing raw data
+# To get compile cleaned data used in the report, download the original UNEDITED dataset and place it in the dataset folder
+# Then, run the master.ipy
+dataset/
