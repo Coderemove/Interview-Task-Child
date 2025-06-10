@@ -41,11 +41,47 @@ def check_sheet_duplicates(sheet_name, df):
                 print(group)
     print("\n")
 
+def remove_sheet_duplicates(sheet_name, df):
+    """
+    Remove duplicate rows from df using the 'RowHash' column (keeps first occurrence)
+    and print how many rows were removed.
+    """
+    print(f"Cleaning sheet: {sheet_name}")
+    if 'RowHash' not in df.columns:
+        print("Column 'RowHash' not found. Skipping cleaning.\n")
+        return df
+
+    initial_count = len(df)
+    df_cleaned = df.drop_duplicates(subset='RowHash', keep='first')
+    removed_count = initial_count - len(df_cleaned)
+    print(f"Removed {removed_count} duplicate row(s) based on 'RowHash'.\n")
+    return df_cleaned
+
 excel_file = 'dataset/Copy of Instagram_Analytics - DO NOT DELETE (for interview purposes).xlsx'
 excel_sheets = load_excel_sheets(excel_file)
 excel_sheets.pop('SupermetricsQueries', None)
 
 for sheet_name, df in excel_sheets.items():
     check_sheet_duplicates(sheet_name, df)
+
+for sheet_name, df in excel_sheets.items():
+    excel_sheets[sheet_name] = remove_sheet_duplicates(sheet_name, df)
+
+if "Instagram Top Cities Regions" in excel_sheets:
+    df = excel_sheets["Instagram Top Cities Regions"]
+    if "City" in df.columns:
+        df = df.drop(columns=["City"])
+        excel_sheets["Instagram Top Cities Regions"] = df
+        print("Removed 'City' column from 'Instagram Top Cities Regions' sheet.\n")
+
+for sheet_name, df in excel_sheets.items():
+    if "RowHash" in df.columns:
+        df = df.drop(columns=["RowHash"])
+        excel_sheets[sheet_name] = df
+        print(f"Removed 'RowHash' column from sheet: {sheet_name}\n")
+
+
+
+
 
 

@@ -86,6 +86,12 @@ def main():
         else:
             print("No log files were deleted.")
     
+    # Check if the running Python version matches the recommended version for this program.
+    recommended_python = "Python 3.13.4"
+    current_python = f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    if current_python != recommended_python:
+        print(f"WARNING: The version running this script ({current_python}) does not match the recommended version ({recommended_python}).")
+    
     # Create a new log file with a timestamp in its name.
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
