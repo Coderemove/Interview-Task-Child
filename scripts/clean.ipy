@@ -1,0 +1,3 @@
+import pandas as pd
+unedited_data = pd.read_excel('dataset/Copy of Instagram_Analytics - DO NOT DELETE (for interview purposes).xlsx')
+print(unedited_data.head())
