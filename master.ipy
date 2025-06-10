@@ -8,7 +8,11 @@ import subprocess
 
 def get_cpu_name():
     try:
-        output = subprocess.check_output(["wmic", "cpu", "get", "Name"], stderr=subprocess.DEVNULL, universal_newlines=True)
+        output = subprocess.check_output(
+            ["wmic", "cpu", "get", "Name"],
+            stderr=subprocess.DEVNULL,
+            universal_newlines=True
+        )
         lines = output.strip().splitlines()
         if len(lines) >= 2:
             return lines[1].strip()
@@ -18,10 +22,12 @@ def get_cpu_name():
 
 def get_gpu_name():
     try:
-        output = subprocess.check_output("wmic path win32_VideoController get Name",
-                                           shell=True,
-                                           stderr=subprocess.DEVNULL,
-                                           universal_newlines=True)
+        output = subprocess.check_output(
+            "wmic path win32_VideoController get Name",
+            shell=True,
+            stderr=subprocess.DEVNULL,
+            universal_newlines=True
+        )
         lines = output.strip().splitlines()
         gpus = [line.strip() for line in lines[1:] if line.strip()]
         return ", ".join(gpus) if gpus else "N/A"
@@ -30,10 +36,12 @@ def get_gpu_name():
 
 def get_total_ram():
     try:
-        output = subprocess.check_output("wmic ComputerSystem get TotalPhysicalMemory",
-                                           shell=True,
-                                           stderr=subprocess.DEVNULL,
-                                           universal_newlines=True)
+        output = subprocess.check_output(
+            "wmic ComputerSystem get TotalPhysicalMemory",
+            shell=True,
+            stderr=subprocess.DEVNULL,
+            universal_newlines=True
+        )
         lines = output.strip().splitlines()
         if len(lines) >= 2:
             total_ram_bytes = int(lines[1].strip())
@@ -44,6 +52,7 @@ def get_total_ram():
     return "N/A"
 
 def main():
+    master_start = datetime.datetime.now()
     current_dir = os.path.dirname(os.path.abspath(__file__))
     scripts_dir = os.path.join(current_dir, 'scripts')
     
@@ -57,12 +66,35 @@ def main():
     log_dir = os.path.join(current_dir, 'log')
     os.makedirs(log_dir, exist_ok=True)
     
-    # Create a log file with a timestamp in its name.
+    # Cleanup: If there are 10 or more log files, ask the user to delete the oldest.
+    log_files = sorted(
+        [f for f in os.listdir(log_dir) if f.startswith("log_") and f.endswith(".txt")],
+        key=lambda f: os.path.getmtime(os.path.join(log_dir, f))
+    )
+    if len(log_files) >= 10:
+        consent_cleanup = input(
+            f"There are {len(log_files)} log files in {log_dir}. "
+            f"Would you like to delete the oldest log file ({log_files[0]})? (y/N): "
+        )
+        if consent_cleanup.strip().lower() == "y":
+            oldest_log = os.path.join(log_dir, log_files[0])
+            try:
+                os.remove(oldest_log)
+                print(f"Deleted oldest log file: {log_files[0]}")
+            except Exception as e:
+                print(f"Error deleting log file: {e}")
+        else:
+            print("No log files were deleted.")
+    
+    # Create a new log file with a timestamp in its name.
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
     
     # Ask for user consent to collect debugging info.
-    consent_input = input("This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) for logging purposes. Do you consent? (y/N): ")
+    consent_input = input(
+        "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) "
+        "for logging purposes. Do you consent? (y/N): "
+    )
     debug_consent = consent_input.strip().lower() == "y"
     
     # Redirect stdout and stderr to the log file while running each .ipy file.
@@ -87,13 +119,37 @@ def main():
                 start_time = datetime.datetime.now()
                 try:
                     runpy.run_path(ipy_file, run_name="__main__")
+                except ModuleNotFoundError as e:
+                    missing_module = e.name if hasattr(e, "name") else str(e).split("'")[1]
+                    sys.__stdout__.write(
+                        f"Module '{missing_module}' is missing when running {ipy_file}.\n"
+                        "Would you like to install it? (y/N): "
+                    )
+                    sys.__stdout__.flush()
+                    answer = sys.__stdin__.readline().strip()
+                    if answer.lower() == "y":
+                        try:
+                            subprocess.check_call([sys.executable, "-m", "pip", "install", missing_module])
+                            sys.__stdout__.write(f"Module '{missing_module}' installed. Retrying {ipy_file}...\n")
+                            sys.__stdout__.flush()
+                            runpy.run_path(ipy_file, run_name="__main__")
+                        except Exception as e2:
+                            sys.__stdout__.write(f"Error installing '{missing_module}': {e2}\n")
+                            sys.__stdout__.flush()
+                    else:
+                        sys.__stdout__.write("Skipping installation and continuing.\n")
+                        sys.__stdout__.flush()
                 except Exception as e:
                     print(f"Error running {ipy_file}: {e}")
                 end_time = datetime.datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 print(f"Finished {ipy_file} in {duration:.2f} seconds\n")
+            
+            # Record how long master.ipy ran.
+            master_end = datetime.datetime.now()
+            master_duration = (master_end - master_start).total_seconds()
+            print(f"Master script executed in {master_duration:.2f} seconds")
     
-    # After execution is complete, inform the user of the log file location.
     print(f"All scripts executed. Check log file: {log_file_path}")
 
 if __name__ == "__main__":
