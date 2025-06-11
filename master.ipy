@@ -5,6 +5,7 @@ import platform
 import sys
 from contextlib import redirect_stdout, redirect_stderr
 import subprocess
+from tqdm import tqdm
 
 def get_cpu_name():
     try:
@@ -56,11 +57,17 @@ def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     scripts_dir = os.path.join(current_dir, 'scripts')
     
-    # Hardcode the order of scripts here.
     ipy_files = [
         os.path.join(scripts_dir, 'clean.ipy'),
+        os.path.join(scripts_dir, 'analysis.ipy'),
         # Add more scripts in the desired order if needed.
     ]
+    
+    # Determine total steps:
+    # 1: Log cleanup, 2: Python version check, 3: Logfile + debug info setup,
+    # 4: Running ipy_files (1 step per file), 5: Finalization.
+    total_steps = 3 + len(ipy_files) + 1
+    progress = tqdm(total=total_steps, desc="Master Script Progress", unit="step")
     
     # Create a log directory if it doesn't exist.
     log_dir = os.path.join(current_dir, 'log')
@@ -85,25 +92,25 @@ def main():
                 print(f"Error deleting log file: {e}")
         else:
             print("No log files were deleted.")
+    progress.update(1)
     
     # Check if the running Python version matches the recommended version for this program.
     recommended_python = "Python 3.13.4"
     current_python = f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     if current_python != recommended_python:
         print(f"WARNING: The version running this script ({current_python}) does not match the recommended version ({recommended_python}).")
+    progress.update(1)
     
-    # Create a new log file with a timestamp in its name.
+    # Create a new log file with a timestamp in its name and ask for debug info consent.
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
-    
-    # Ask for user consent to collect debugging info.
     consent_input = input(
         "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) "
         "for logging purposes. Do you consent? (y/N): "
     )
     debug_consent = consent_input.strip().lower() == "y"
+    progress.update(1)
     
-    # Redirect stdout and stderr to the log file while running each .ipy file.
     with open(log_file_path, 'w') as log_file:
         with redirect_stdout(log_file), redirect_stderr(log_file):
             if debug_consent:
@@ -119,42 +126,49 @@ def main():
             else:
                 print("User did not consent to collect debugging information.\n")
             
-            # Run each .ipy file in the specified order and track runtime.
+            # Run each .ipy file with a progress update for each script.
             for ipy_file in ipy_files:
                 print(f"Running {ipy_file}...")
                 start_time = datetime.datetime.now()
-                try:
-                    runpy.run_path(ipy_file, run_name="__main__")
-                except ModuleNotFoundError as e:
-                    missing_module = e.name if hasattr(e, "name") else str(e).split("'")[1]
-                    sys.__stdout__.write(
-                        f"Module '{missing_module}' is missing when running {ipy_file}.\n"
-                        "Would you like to install it? (y/N): "
-                    )
-                    sys.__stdout__.flush()
-                    answer = sys.__stdin__.readline().strip()
-                    if answer.lower() == "y":
-                        try:
-                            subprocess.check_call([sys.executable, "-m", "pip", "install", missing_module])
-                            sys.__stdout__.write(f"Module '{missing_module}' installed. Retrying {ipy_file}...\n")
-                            sys.__stdout__.flush()
-                            runpy.run_path(ipy_file, run_name="__main__")
-                        except Exception as e2:
-                            sys.__stdout__.write(f"Error installing '{missing_module}': {e2}\n")
-                            sys.__stdout__.flush()
-                    else:
-                        sys.__stdout__.write("Skipping installation and continuing.\n")
+                while True:
+                    try:
+                        runpy.run_path(ipy_file, run_name="__main__")
+                        break  # Successfully ran, exit the loop.
+                    except ModuleNotFoundError as e:
+                        missing_module = e.name if hasattr(e, "name") else str(e).split("'")[1]
+                        sys.__stdout__.write(
+                            f"Module '{missing_module}' is missing when running {ipy_file}.\n"
+                            "Would you like to install it? (y/N): "
+                        )
                         sys.__stdout__.flush()
-                except Exception as e:
-                    print(f"Error running {ipy_file}: {e}")
+                        answer = sys.__stdin__.readline().strip()
+                        if answer.lower() == "y":
+                            try:
+                                subprocess.check_call([sys.executable, "-m", "pip", "install", missing_module])
+                                sys.__stdout__.write(f"Module '{missing_module}' installed. Retrying {ipy_file}...\n")
+                                sys.__stdout__.flush()
+                            except Exception as e2:
+                                sys.__stdout__.write(f"Error installing '{missing_module}': {e2}\n")
+                                sys.__stdout__.flush()
+                                break  # Exit the while loop if installation failed.
+                        else:
+                            sys.__stdout__.write("Skipping installation and continuing.\n")
+                            sys.__stdout__.flush()
+                            break  # Exit the while loop.
+                    except Exception as e:
+                        print(f"Error running {ipy_file}: {e}")
+                        break
                 end_time = datetime.datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 print(f"Finished {ipy_file} in {duration:.2f} seconds\n")
+                progress.update(1)
             
-            # Record how long master.ipy ran.
+            # Finalize master script.
             master_end = datetime.datetime.now()
             master_duration = (master_end - master_start).total_seconds()
             print(f"Master script executed in {master_duration:.2f} seconds")
+    progress.update(1)
+    progress.close()
     
     print(f"All scripts executed. Check log file: {log_file_path}")
 

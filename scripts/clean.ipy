@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 def load_excel_sheets(file_path):
     """
@@ -79,6 +80,19 @@ for sheet_name, df in excel_sheets.items():
         df = df.drop(columns=["RowHash"])
         excel_sheets[sheet_name] = df
         print(f"Removed 'RowHash' column from sheet: {sheet_name}\n")
+
+if "Instagram Post Engagement" in excel_sheets:
+    df = excel_sheets["Instagram Post Engagement"]
+    if "Media ID" in df.columns:
+        df = df.drop(columns=["Media ID"])
+        excel_sheets["Instagram Post Engagement"] = df
+        print("Dropped 'Media ID' column from 'Instagram Post Engagement' sheet.\n")
+
+output_folder = "dataset"
+for sheet_name, df in excel_sheets.items():
+    output_path = os.path.join(output_folder, f"{sheet_name}.csv")
+    df.to_csv(output_path, index=False)
+    print(f"Exported sheet '{sheet_name}' to {output_path}\n")
 
 
 
