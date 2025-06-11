@@ -5,7 +5,8 @@ dataset/
 log/
 # Logs are for debugging purposes
 # Including the report to avoid publishing sensitive information
-report.html
-report.qmd
+report.*
 report/
 report_files/
+dashboard.*
+dashboard_files/

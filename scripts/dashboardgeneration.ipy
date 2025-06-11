@@ -1,0 +1,51 @@
+import subprocess
+import time
+import os
+import sys
+
+def create_dashboard_qmd():
+    dashboard_content = """---
+title: "Interactive Dashboard"
+format: html
+editor: visual
+dashboard: true
+---
+
+# Dashboard Overview
+
+This interactive dashboard was generated automatically using Quarto.
+
+## System Information
+
+Below is some system information:
+
+```{python}
+import platform, sys, datetime
+print("Operating System:", platform.system(), platform.release())
+print("Python Version:", sys.version.split()[0])
+print("Current Date & Time:", datetime.datetime.now())
+```
+
+## Analysis Results
+
+Add your interactive analysis components or visualizations here.
+"""
+    with open("dashboard.qmd", "w", encoding="utf-8") as f:
+        f.write(dashboard_content)
+    print("Created dashboard.qmd with the required dashboard content.")
+
+def run_dashboard():
+    try:
+        # Use quarto preview to serve the dashboard locally.
+        # Quarto will automatically open the dashboard in your default browser.
+        process = subprocess.Popen(["quarto", "preview", "dashboard.qmd"], shell=True)
+        print("Launching the dashboard. It should open in your browser shortly.")
+        # Allow time for the server to start.
+        time.sleep(5)
+    except Exception as e:
+        print(f"Error launching dashboard: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    create_dashboard_qmd()
+    run_dashboard()

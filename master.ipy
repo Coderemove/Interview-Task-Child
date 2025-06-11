@@ -52,16 +52,38 @@ def get_total_ram():
         return "N/A"
     return "N/A"
 
+def check_quarto_processes():
+    try:
+        # Use tasklist to find any running quarto.exe processes.
+        tasks = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq quarto.exe"], universal_newlines=True)
+        if "quarto.exe" in tasks.lower():
+            consent = input(
+                "Found running Quarto process(es) that may host a dashboard preview. "
+                "Do you consent to close them? (y/N): "
+            )
+            if consent.strip().lower() == "y":
+                # Kill the listed Quarto processes
+                subprocess.call(["taskkill", "/F", "/IM", "quarto.exe"])
+                print("Closed all Quarto processes.")
+            else:
+                print("Quarto processes were not closed. They may interfere with the new dashboard preview.")
+    except Exception as e:
+        print(f"Error checking Quarto processes: {e}")
+
 def main():
     master_start = datetime.datetime.now()
     current_dir = os.path.dirname(os.path.abspath(__file__))
     scripts_dir = os.path.join(current_dir, 'scripts')
+    
+    # Check for running Quarto processes before starting.
+    check_quarto_processes()
     
     ipy_files = [
         os.path.join(scripts_dir, 'clean.ipy'),
         os.path.join(scripts_dir, 'basicanalysis.ipy'),
         os.path.join(scripts_dir, 'outlierdetection.ipy'),
         os.path.join(scripts_dir, 'reportgeneration.ipy'),
+        os.path.join(scripts_dir, 'dashboardgeneration.ipy'),
         # Add more scripts in the desired order if needed.
     ]
     
