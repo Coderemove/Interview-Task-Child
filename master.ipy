@@ -59,7 +59,9 @@ def main():
     
     ipy_files = [
         os.path.join(scripts_dir, 'clean.ipy'),
-        os.path.join(scripts_dir, 'analysis.ipy'),
+        os.path.join(scripts_dir, 'basicanalysis.ipy'),
+        os.path.join(scripts_dir, 'outlierdetection.ipy'),
+        os.path.join(scripts_dir, 'reportgeneration.ipy'),
         # Add more scripts in the desired order if needed.
     ]
     
@@ -102,7 +104,7 @@ def main():
     progress.update(1)
     
     # Create a new log file with a timestamp in its name and ask for debug info consent.
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
     log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
     consent_input = input(
         "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) "

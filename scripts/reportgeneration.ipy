@@ -1,0 +1,69 @@
+import datetime
+import platform
+import subprocess
+import sys
+
+def create_report_qmd():
+    # Collect required system and project information
+    report_title = "Instagram Data Analysis Report"
+    author = "Szymon Fedyk"
+    date_str = datetime.datetime.now().strftime("%d-%m-%Y")
+    python_version = sys.version.split()[0]
+    os_info = f"{platform.system()} {platform.release()}"
+
+    # Define the QMD content with placeholders.
+    # You can add additional sections or code blocks as needed.
+    report_content = f"""---
+title: "{report_title}"
+author: "{author}"
+date: "{date_str}"
+format: html
+---
+
+# Overview
+
+This report was generated automatically using code in the reposistory https://github.com/Coderemove/Interview-Task-Child.
+
+## System Information
+
+- **Operating System:** {os_info}
+- **Python Version:** {python_version}
+
+## Analysis Details
+
+<!-- Outline your analysis and include any details required.
+For example:
+- Data sources used
+- Pre-processing steps
+- Statistical methods or visualizations generated
+-->
+    
+# Results
+
+```{{python}}
+# Insert your analysis code here.
+print("Place your analysis results here.")
+```
+
+# Conclusion
+
+Summarize key findings here.
+"""
+
+    # Write the report.qmd file.
+    with open("report.qmd", "w", encoding="utf-8") as f:
+        f.write(report_content)
+    print("Created report.qmd with the required information.")
+
+def render_report():
+    try:
+        # Render the Quarto report.
+        subprocess.run(["quarto", "render", "report.qmd"], check=True)
+        print("Report generated successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error generating report: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    create_report_qmd()
+    render_report()
