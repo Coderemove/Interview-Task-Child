@@ -2,14 +2,18 @@ import datetime
 import platform
 import subprocess
 import sys
+import webbrowser
+import os
 
 def create_report_qmd():
     # Collect required system and project information
     report_title = "Instagram Data Analysis Report"
     author = "Szymon Fedyk"
     date_str = datetime.datetime.now().strftime("%d-%m-%Y")
-    python_version = sys.version.split()[0]
-    os_info = f"{platform.system()} {platform.release()}"
+    # Ensure the graphs directory exists
+    if not os.path.exists("graphs"):
+        print("ERROR: The 'graphs' directory does not exist. Please run the master.ipy and not any scripts directly!")
+        sys.exit(1)
 
     # Define the QMD content with placeholders.
     # You can add additional sections or code blocks as needed.
@@ -26,10 +30,31 @@ This report was generated automatically using code in the reposistory https://gi
 
 ## System Information
 
-- **Operating System:** {os_info}
-- **Python Version:** {python_version}
 
-## Analysis Details
+# Project Information
+
+This project was made by Szymon Fedyk as part of an interview task for My Thiving Child. The goal was to analyze Instagram data and generate insights as per the instructions provided.
+The main 
+
+# Instagram Data Analysis
+
+## Cleaning
+The first process of analysis was cleaning the dataset. I used python to check for duplication (by using row hashes and other tests), and removed any duplication found. 
+I also split the xlsv file into csv files for easier manipulation in pandas.
+I also dropped any columns that were unneeded, and removed the queries sheet from the project as it seemed to be some form of query log from whatever service was used to collect and query this data.
+
+## Engagement on Instagram
+I used the Instagram Post Engagement dataset to calculate the average engagement on the post, and then grouped them into weeks and months to analyze the changes in engagement over time. 
+I used a t-test to determine if there was a significant change in engagement between months.
+I found that the only month that had significance was 2024-11, and so I decided to focus on that month for more in-depth analysis.
+
+```{{python}}
+import os
+from IPython.display import Image, display
+img_path = os.path.join("graphs", "graph1.png")
+display(Image(filename=img_path))
+```
+##
 
 <!-- Outline your analysis and include any details required.
 For example:
@@ -38,14 +63,14 @@ For example:
 - Statistical methods or visualizations generated
 -->
     
-# Results
+## Results
 
 ```{{python}}
 # Insert your analysis code here.
 print("Place your analysis results here.")
 ```
 
-# Conclusion
+## Conclusion
 
 Summarize key findings here.
 """
@@ -67,3 +92,7 @@ def render_report():
 if __name__ == "__main__":
     create_report_qmd()
     render_report()
+
+    # Open the generated report in the default web browser
+    report_path = os.path.abspath('report.html')
+    webbrowser.open_new_tab('file://' + report_path)

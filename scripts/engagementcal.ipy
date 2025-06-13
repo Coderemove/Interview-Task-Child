@@ -1,0 +1,114 @@
+import os
+# Set the CFFI mode to ABI on Windows for rpy2
+os.environ["RPY2_CFFI_MODE"] = "ABI"
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import rpy2.robjects as ro
+from rpy2.robjects import pandas2ri
+from rpy2.robjects.conversion import localconverter
+from rpy2.robjects.vectors import FloatVector
+
+# Load the CSV data
+df = pd.read_csv('dataset/Instagram Post Engagement.csv')
+
+# Data validation: keep only rows with valid Media product type (FEED or REELS)
+df = df[df['Media product type'].isin(['FEED', 'REELS'])]
+
+# Ensure Date is in datetime format and drop invalid dates
+df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+df.dropna(subset=['Date'], inplace=True)
+
+# Calculate total engagement for each post if missing
+if 'post_engagement' not in df.columns:
+    df['post_engagement'] = df['Like count'] + df['Comments count'] + df['Shares'] + df['Unique saves']
+
+# -------------------------------
+# Aggregate data by week
+# -------------------------------
+# Create a Week column as the start date of each week
+df['Week'] = df['Date'].dt.to_period('W').apply(lambda r: r.start_time)
+
+# Compute the average engagement for each week
+weekly = df.groupby('Week')['post_engagement'].mean().reset_index()
+
+# Assign each week to a month based on its start date
+weekly['Month'] = weekly['Week'].dt.to_period('M')
+
+# -------------------------------
+# Test for monthly change overall using weekly data
+# -------------------------------
+# Sort unique months in ascending order
+unique_months = sorted(weekly['Month'].unique())
+
+results = []
+for i in range(1, len(unique_months)):
+    prev_month = unique_months[i - 1]
+    curr_month = unique_months[i]
+    
+    # Get weekly average samples for previous and current months
+    prev_weekly_samples = weekly[weekly['Month'] == prev_month]['post_engagement']
+    curr_weekly_samples = weekly[weekly['Month'] == curr_month]['post_engagement']
+    
+    # Calculate change in mean weekly engagement (current minus previous)
+    change = curr_weekly_samples.mean() - prev_weekly_samples.mean()
+    
+    # Only perform t.test if both months have at least 2 weeks of data
+    if len(prev_weekly_samples) < 2 or len(curr_weekly_samples) < 2:
+        t_stat = None
+        p_value = None
+        significant = False
+        print(f"Skipping t.test for month {curr_month} due to insufficient weekly observations.")
+    else:
+        with localconverter(ro.default_converter + pandas2ri.converter):
+            r_prev = FloatVector(list(prev_weekly_samples))
+            r_curr = FloatVector(list(curr_weekly_samples))
+        t_test_result = ro.r['t.test'](r_curr, r_prev)
+        p_value = t_test_result.rx2('p.value')[0]
+        t_stat = t_test_result.rx2('statistic')[0]
+        significant = p_value < 0.05
+        
+    results.append({
+        'Month': str(curr_month),
+        'Change': change,
+        't_stat': t_stat,
+        'p_value': p_value,
+        'Significant': significant
+    })
+
+results_df = pd.DataFrame(results)
+print(results_df)
+
+# -------------------------------
+# Plot the Weekly Average Engagement with the significant drop highlighted
+# -------------------------------
+plt.figure(figsize=(10,6))
+# Plot the overall weekly average line (blue)
+plt.plot(weekly['Week'], weekly['post_engagement'], marker='o', label='Weekly Average Engagement', color='blue')
+
+# Highlight weeks in month 2024-11 in red if it is significant
+highlight_month = pd.Period('2024-11', freq='M')
+highlight = weekly[weekly['Month'] == highlight_month]
+if not highlight.empty:
+    plt.plot(highlight['Week'], highlight['post_engagement'], marker='o', color='red',
+             linewidth=3, label='Significant Drop (2024-11)')
+
+# Remove X axis label and update the title
+plt.title('Changes in the Average Engagement on Instagram')
+plt.ylabel('Average Post Engagement')
+plt.xticks(rotation=45)
+plt.legend()
+plt.tight_layout()
+
+# Export the graph to the graphs folder as "graph1.png"
+if not os.path.exists("graphs"):
+    os.makedirs("graphs")
+plt.savefig(os.path.join("graphs", "graph1.png"))
+
+
+
+
+
+
+
+
