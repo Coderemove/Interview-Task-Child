@@ -1,60 +1,63 @@
-import os
 import pandas as pd
 import matplotlib.pyplot as plt
-import rpy2.robjects as ro
-from rpy2.robjects import pandas2ri
-from rpy2.robjects.conversion import localconverter
-from rpy2.robjects.vectors import FloatVector
-from rpy2.robjects.packages import importr
+from scipy.stats import f_oneway
 
-os.environ["RPY2_CFFI_MODE"] = "ABI"
-required_packages = ["ggplot2", "dplyr", "stats"]
-
-ro.r(f'''
-packages <- c({", ".join([f'"{pkg}"' for pkg in required_packages])})
-installed <- rownames(installed.packages())
-for (pkg in packages) {{
-  if (!pkg %in% installed) {{
-    install.packages(pkg, repos="https://cloud.r-project.org")
-  }}
-}}
-''')
-
-r_libs = {pkg: importr(pkg) for pkg in required_packages}
-
+# Load your dataset
+# filepath: c:\Users\Code\Desktop\Interview Task\Interview-Task-Child\data.csv
 df = pd.read_csv('dataset/Instagram Post Engagement.csv')
 
-rdf = pandas2ri.py2rpy(df)
+# Ensure 'Media reach' column has no missing values
+df = df.dropna(subset=['Media reach'])
 
-# R code for aggregation and plotting
-ro.r('''
-library(ggplot2)
-library(dplyr)
+# Monthly Analysis
+df['Month'] = pd.to_datetime(df['Date']).dt.to_period('M')
+monthly_avg = df.groupby('Month')['Media reach'].mean().reset_index()
+monthly_avg['Month'] = monthly_avg['Month'].dt.to_timestamp()
 
-# Assume 'rdf' is the input dataframe
-df <- rdf
+# Weekly Analysis
+df['Week'] = pd.to_datetime(df['Date']).dt.to_period('W')
+weekly_avg = df.groupby('Week')['Media reach'].mean().reset_index()
+weekly_avg['Week'] = weekly_avg['Week'].dt.start_time
 
-# Create a MonthYear column
-df$MonthYear <- paste(df$Month, df$Year, sep="/")
+# Save Monthly Graph
+plt.figure(figsize=(10, 6))
+plt.plot(monthly_avg['Month'], monthly_avg['Media reach'], marker='o', linestyle='-')
+plt.title('Average Media Reach by Month')
+plt.xlabel('Month')
+plt.ylabel('Average Media Reach')
+plt.grid(True)
+plt.savefig('graphs/graph2_monthly.png')
+plt.close()
 
-# Aggregate average Media Reach
-agg <- df %>%
-  group_by(MonthYear, Type) %>%
-  summarise(AvgReach = mean(Media_Reach, na.rm=TRUE))
+# Save Weekly Graph
+plt.figure(figsize=(10, 6))
+plt.plot(weekly_avg['Week'], weekly_avg['Media reach'], marker='o', linestyle='-')
+plt.title('Average Media Reach by Week')
+plt.xlabel('Week')
+plt.ylabel('Average Media Reach')
+plt.grid(True)
+plt.savefig('graphs/graph2_weekly.png')
+plt.close()
 
-# Bar plot
-p <- ggplot(agg, aes(x=MonthYear, y=AvgReach, fill=Type)) +
-  geom_bar(stat="identity", position=position_dodge()) +
-  labs(x="Month/Year", y="Average Media Reach") +
-  theme_minimal()
+# Compare Monthly and Weekly Results
+# Align data for comparison
+monthly_avg['Period'] = monthly_avg['Month'].dt.to_period('M')
+weekly_avg['Period'] = weekly_avg['Week'].dt.to_period('M')
 
-print(p)
+# Merge monthly and weekly averages on the same period
+comparison_df = pd.merge(monthly_avg, weekly_avg, on='Period', suffixes=('_monthly', '_weekly'))
 
-# Significance testing for each month
-results <- df %>%
-  group_by(MonthYear) %>%
-  summarise(p_value = ifelse(length(unique(Type)) == 2,
-                            t.test(Media_Reach ~ Type)$p.value,
-                            NA))
-print(results)
-''')
+# Perform ANOVA test to check for significant differences
+f_stat, p_value = f_oneway(comparison_df['Media reach_monthly'], comparison_df['Media reach_weekly'])
+
+# Display results
+if p_value < 0.05:
+    print(f"Significant difference detected between monthly and weekly averages (F-statistic: {f_stat:.2f}, p-value: {p_value:.4f})")
+else:
+    print(f"No significant difference detected between monthly and weekly averages (F-statistic: {f_stat:.2f}, p-value: {p_value:.4f})")
+
+
+
+
+
+

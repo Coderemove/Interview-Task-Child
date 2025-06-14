@@ -5,7 +5,10 @@ import platform
 import sys
 from contextlib import redirect_stdout, redirect_stderr
 import subprocess
+import warnings
 from tqdm import tqdm
+
+warnings.filterwarnings("ignore", category=UserWarning, module="rpy2")
 
 def get_cpu_name():
     try:

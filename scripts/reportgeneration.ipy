@@ -43,7 +43,7 @@ I also dropped any columns that were unneeded, and removed the queries sheet fro
 
 ## Engagement on Instagram
 I used the Instagram Post Engagement dataset to calculate the average engagement on the post, and then grouped them into weeks and months to analyze the changes in engagement over time. 
-I used a t-test to determine if there was a significant change in engagement between months.
+I used a t-test to determine if there was a significant change in engagement between the weeks, and that allowed me to identify any significant month.
 I found that the only month that had significance was 2024-11, and so I decided to focus on that month for more in-depth analysis.
 
 ```{{python}}
@@ -52,6 +52,21 @@ from IPython.display import Image, display
 img_path = os.path.join("graphs", "graph1.png")
 display(Image(filename=img_path))
 ```
+
+## Media Reach impact on Engagement 
+As I had found out that the engagement on Instagram had a significant drop in November 2024, I decided to analyze the media reach of the posts for the whole dataset.
+Interestingly, I did not find any significant difference in the media reach of the posts between the months.
+
+```{{python}}
+import os
+from IPython.display import Image, display
+img_path = os.path.join("graphs", "graph2_monthly.png")
+display(Image(filename=img_path))
+```
+
+To allow a fair comparison between the media reach and engagement, I also tested for significance between the weekly and monthly media reach, and found that there was no significant difference between the two.
+Therefore, its fair to say that media reach doesn't have a clear impact on engagement.
+If you are interested in the exact statistical values, they are available in the logs.
 
 ## Reels vs Feed Posts
 
