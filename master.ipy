@@ -5,10 +5,31 @@ import platform
 import sys
 from contextlib import redirect_stdout, redirect_stderr
 import subprocess
-import warnings
 from tqdm import tqdm
+import tkinter as tk
+from tkinter import messagebox
 
-warnings.filterwarnings("ignore", category=UserWarning, module="rpy2")
+def show_error(message):
+    root = tk.Tk()
+    root.withdraw()  
+    messagebox.showerror("Dependency Error", message)
+    root.destroy()
+
+def check_dependencies():
+    try:
+        subprocess.run(['quarto', '--version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("Quarto is installed.")
+    except FileNotFoundError:
+        show_error("Quarto is not installed and/or it is not present in the SYSTEM PATH variable. Please install Quarto before proceeding.")
+        sys.exit(1)
+    try:
+        subprocess.run(['R', '--version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("R is installed.")
+    except FileNotFoundError:
+        show_error("R is not installed and/or it is not present in the SYSTEM PATH variable. Please install R before proceeding.")
+        sys.exit(1)
+    
+check_dependencies()
 
 def get_cpu_name():
     try:
@@ -57,7 +78,6 @@ def get_total_ram():
 
 def check_quarto_processes():
     try:
-        # Use tasklist to find any running quarto.exe processes.
         tasks = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq quarto.exe"], universal_newlines=True)
         if "quarto.exe" in tasks.lower():
             consent = input(
@@ -65,7 +85,6 @@ def check_quarto_processes():
                 "Do you consent to close them? (y/N): "
             )
             if consent.strip().lower() == "y":
-                # Kill the listed Quarto processes
                 subprocess.call(["taskkill", "/F", "/IM", "quarto.exe"])
                 print("Closed all Quarto processes.")
             else:
@@ -77,8 +96,6 @@ def main():
     master_start = datetime.datetime.now()
     current_dir = os.path.dirname(os.path.abspath(__file__))
     scripts_dir = os.path.join(current_dir, 'scripts')
-    
-    # Check for running Quarto processes before starting.
     check_quarto_processes()
     
     ipy_files = [
@@ -90,17 +107,12 @@ def main():
         # Add more scripts in the desired order if needed.
     ]
     
-    # Determine total steps:
-    # 1: Log cleanup, 2: Python version check, 3: Logfile + debug info setup,
-    # 4: Running ipy_files (1 step per file), 5: Finalization.
     total_steps = 3 + len(ipy_files) + 1
     progress = tqdm(total=total_steps, desc="Master Script Progress", unit="step")
     
-    # Create a log directory if it doesn't exist.
     log_dir = os.path.join(current_dir, 'log')
     os.makedirs(log_dir, exist_ok=True)
-    
-    # Cleanup: If there are 10 or more log files, ask the user to delete the oldest.
+  
     log_files = sorted(
         [f for f in os.listdir(log_dir) if f.startswith("log_") and f.endswith(".txt")],
         key=lambda f: os.path.getmtime(os.path.join(log_dir, f))
@@ -121,14 +133,12 @@ def main():
             print("No log files were deleted.")
     progress.update(1)
     
-    # Check if the running Python version matches the recommended version for this program.
     recommended_python = "Python 3.13.4"
     current_python = f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     if current_python != recommended_python:
         print(f"WARNING: The version running this script ({current_python}) does not match the recommended version ({recommended_python}).")
     progress.update(1)
     
-    # Create a new log file with a timestamp in its name and ask for debug info consent.
     timestamp = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
     log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
     consent_input = input(
@@ -153,14 +163,13 @@ def main():
             else:
                 print("User did not consent to collect debugging information.\n")
             
-            # Run each .ipy file with a progress update for each script.
             for ipy_file in ipy_files:
                 print(f"Running {ipy_file}...")
                 start_time = datetime.datetime.now()
                 while True:
                     try:
                         runpy.run_path(ipy_file, run_name="__main__")
-                        break  # Successfully ran, exit the loop.
+                        break  
                     except ModuleNotFoundError as e:
                         missing_module = e.name if hasattr(e, "name") else str(e).split("'")[1]
                         sys.__stdout__.write(
@@ -177,11 +186,11 @@ def main():
                             except Exception as e2:
                                 sys.__stdout__.write(f"Error installing '{missing_module}': {e2}\n")
                                 sys.__stdout__.flush()
-                                break  # Exit the while loop if installation failed.
+                                break  
                         else:
                             sys.__stdout__.write("Skipping installation and continuing.\n")
                             sys.__stdout__.flush()
-                            break  # Exit the while loop.
+                            break  
                     except Exception as e:
                         print(f"Error running {ipy_file}: {e}")
                         break
@@ -190,7 +199,6 @@ def main():
                 print(f"Finished {ipy_file} in {duration:.2f} seconds\n")
                 progress.update(1)
             
-            # Finalize master script.
             master_end = datetime.datetime.now()
             master_duration = (master_end - master_start).total_seconds()
             print(f"Master script executed in {master_duration:.2f} seconds")
