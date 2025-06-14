@@ -26,9 +26,7 @@ format: html
 
 # Overview
 
-This report was generated automatically using code in the reposistory https://github.com/Coderemove/Interview-Task-Child.
-
-## System Information
+This report was generated using code in the reposistory https://github.com/Coderemove/Interview-Task-Child.
 
 
 # Project Information
@@ -54,7 +52,9 @@ from IPython.display import Image, display
 img_path = os.path.join("graphs", "graph1.png")
 display(Image(filename=img_path))
 ```
-##
+
+## Reels vs Feed Posts
+
 
 <!-- Outline your analysis and include any details required.
 For example:
