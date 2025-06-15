@@ -22,11 +22,12 @@ title: "{report_title}"
 author: "{author}"
 date: "{date_str}"
 format: html
+theme: lumen
 ---
 
 # Overview
 
-This report was generated using code in the reposistory https://github.com/Coderemove/Interview-Task-Child.
+This report was generated using code in the reposistory <https://github.com/Coderemove/Interview-Task-Child>.
 
 
 # Project Information
@@ -84,37 +85,27 @@ Some websites do suggest that Instagram will reduce the visibility of accounts t
 Furthermore, the decrease in engagement could have swayed the algorithm to show less of the posts.
 
 ## Possible Solutions
+
 **Diversify the social media websites used to promote the content.**
 One of the possible solutions I thought of, upon checking the age demographics, was to look into why that demographic might not be as engaged with Instagram.
 ```{{python}}
 import os
 from IPython.display import Image, display
-img_path = os.path.join("graphs", "graph4.png")
+img_path = os.path.join("graphs", "graph4_female.png")
+display(Image(filename=img_path))
+img_path = os.path.join("graphs", "graph4_male.png")
+display(Image(filename=img_path))
+img_path = os.path.join("graphs", "graph4_undefined.png")
 display(Image(filename=img_path))
 ```
-The age demographic of users shows that they are mostly 
-This paper https://onlinelibrary.wiley.com/doi/abs/10.1002/mar.21499 suggests that one of the factors in why the users might not engage with content is lack of privacy and trust in the platform and the advertiser.
+This paper <https://onlinelibrary.wiley.com/doi/abs/10.1002/mar.21499> suggests that one of the factors in why the users might not engage with content is lack of privacy and trust in the platform and the advertiser.
+Furthermore, <https://www.statista.com/statistics/1440802/privacy-actions-taken-internet-users-global-by-age/#:~:text=As%20of%20June%202023%2C%20roughly%2038%20percent,steps%20regarding%20their%20privacy%20on%20the%20internet.> shows that 45% of the largest user age group cares about privacy on the internet.
+Since last year, Instagram has been under fire for its privacy policies, and so it is possible that the users are not engaging with the content due to that.
+
+I have not looked into the linked facebook dataset, due to the limitations of the timeframe, but one of the possible solutions would be to post the media content onto Tiktok.
+Its not to say that Tiktok is a perfect, or even better platform when it comes to privacy, but it is still a platform with a very large user base. The user base does favour younger audiences, but some sites do claim that around 15-25% of the user base are adults between 35-44.
 
 
-
-
-<!-- Outline your analysis and include any details required.
-For example:
-- Data sources used
-- Pre-processing steps
-- Statistical methods or visualizations generated
--->
-    
-## Results
-
-```{{python}}
-# Insert your analysis code here.
-print("Place your analysis results here.")
-```
-
-## Conclusion
-
-Summarize key findings here.
 """
 
     # Write the report.qmd file.
