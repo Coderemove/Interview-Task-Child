@@ -6,16 +6,68 @@ import webbrowser
 import pandas as pd
 import datetime  # needed for timestamping if required
 
-df1 = pd.read_csv("dataset/Instagram Profile Overview.csv")
-
 def create_dashboard_qmd():
     dashboard_content = """---
 title: "Interactive Dashboard"
-format: html
-echo: false
-theme: lumen
-dashboard: true
+format:
+  html:
+    echo: false
+    theme: lumen
+    dashboard: true
+jupyter:
+  python: "quarto-env"
 ---
+
+::: {.sidebar}
+```{python}
+#| widget: true
+import pandas as pd
+import seaborn as sns
+import plotly.express as px
+import ipywidgets as widgets
+from IPython.display import display
+
+# Load and parse date column
+df = pd.read_csv("dataset/Instagram Profile Overview.csv", parse_dates=["Date"])
+dates = sorted(df["Date"].unique())
+
+# Vertical range slider for date selection
+date_slider = widgets.SelectionRangeSlider(
+    options=[(d.strftime("%Y-%m-%d"), d) for d in dates],
+    index=(0, len(dates)-1),
+    description="Date Range:",
+    orientation="vertical",
+    layout=widgets.Layout(height="400px", width="200px")
+)
+
+# Convert seaborn muted palette to hex
+colors = sns.color_palette("muted", 2).as_hex()
+
+def update(date_range):
+    start, end = date_range
+    mask = (df["Date"] >= start) & (df["Date"] <= end)
+    sel = df.loc[mask]
+
+    figs = []
+    for col in df.columns.drop("Date"):
+        total = df[col].sum()
+        selected = sel[col].sum()
+        fig = px.bar(
+            x=["Total", "Selected"],
+            y=[total, selected],
+            color=["Total", "Selected"],
+            color_discrete_sequence=colors,
+            title=col,
+            labels={"x": "", "y": col}
+        )
+        figs.append(fig)
+    # stack vertically
+    return widgets.VBox(figs)
+
+interactive = widgets.interactive(update, date_range=date_slider)
+display(widgets.HBox([date_slider, interactive.children[1]]))
+```
+:::
 
 <!-- Dark/Light Mode Toggle Slider -->
 <style>

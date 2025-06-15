@@ -1,35 +1,168 @@
-import os
-import runpy
-import datetime
-import platform
 import sys
-from contextlib import redirect_stdout, redirect_stderr
+import os
+import ctypes
+import platform
 import subprocess
-from tqdm import tqdm
+import datetime
 import tkinter as tk
 from tkinter import messagebox
+from contextlib import redirect_stdout, redirect_stderr
+from tqdm import tqdm
+import runpy
+import socket
+import webbrowser
+import signal
+import threading  
 
-def show_error(message):
-    root = tk.Tk()
-    root.withdraw()  
-    messagebox.showerror("Dependency Error", message)
-    root.destroy()
+#––– helper to run a single external command elevated via UAC –––
+def run_as_admin(cmd, args):
+    """
+    Runs [cmd] with arguments [args] elevated. 
+    Blocks until the command completes.
+    """
+    # build quoted parameter string
+    params = " ".join(f'"{a}"' for a in args)
+    # invoke UAC‐elevated ShellExecuteW
+    ret = ctypes.windll.shell32.ShellExecuteW(
+        None, 
+        "runas", 
+        cmd, 
+        params, 
+        None, 
+        1
+    )
+    if ret <= 32:
+        raise RuntimeError(f"Failed to elevate: {cmd} {params}")
+
+#––– privileged operations –––
+def check_quarto_processes():
+    try:
+        out = subprocess.check_output(
+            ["tasklist","/FI","IMAGENAME eq quarto.exe"], 
+            universal_newlines=True
+        ).lower()
+        if "quarto.exe" in out:
+            if messagebox.askyesno(
+                "Quarto Detected", 
+                "Found running Quarto. Close all instances?"
+            ):
+                run_as_admin("taskkill", ["/F","/IM","quarto.exe"])
+                print("→ Quarto processes terminated.")
+            else:
+                print("→ Leaving Quarto running.")
+    except Exception as e:
+        print("Error checking/killing Quarto:", e)
+
+def find_free_port():
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+def add_firewall_rule(port):
+    rule = f"QuartoPreview_{port}"
+    args = [
+        "advfirewall","firewall","add","rule",
+        f"name={rule}",
+        "dir=in","action=allow","protocol=TCP",
+        f"localport={port}",
+        "remoteip=127.0.0.1",
+        "profile=Private"
+    ]
+    run_as_admin("netsh", args)
+    return rule
+
+def remove_firewall_rule(rule, port):
+    args = [
+        "advfirewall","firewall","delete","rule",
+        f"name={rule}",
+        "protocol=TCP",
+        f"localport={port}"
+    ]
+    run_as_admin("netsh", args)
+
+def run_dashboard():
+    port = find_free_port()
+    rule = add_firewall_rule(port)
+
+    cmd = [
+      "quarto", "preview", "dashboard.qmd",
+      "--port", str(port),
+      "--no-browser"
+    ]
+    proc = subprocess.Popen(cmd, shell=False)
+    webbrowser.open(f"http://127.0.0.1:{port}")
+
+    # Cleanup function to terminate Quarto and remove firewall rule
+    def cleanup():
+        if proc.poll() is None:
+            proc.terminate()
+        remove_firewall_rule(rule, port)
+
+    # Handler for signals (Ctrl+C or termination)
+    def on_exit(signum=None, frame=None):
+        cleanup()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, on_exit)
+    signal.signal(signal.SIGTERM, on_exit)
+
+    # Schedule automatic cleanup after 1 hour (3600 seconds)
+    timer = threading.Timer(3600, on_exit)
+    timer.daemon = True
+    timer.start()
+
+    # Wait for Quarto to exit; then cancel the timer and clean up
+    proc.wait()
+    timer.cancel()
+    cleanup()
+
+#––– your existing non‐privileged functions below –––
+
+def show_error(msg):
+    tk.Tk().withdraw()
+    messagebox.showerror("Dependency Error", msg)
 
 def check_dependencies():
     try:
-        subprocess.run(['quarto', '--version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print("Quarto is installed.")
+        subprocess.run(["quarto","--version"], check=True, stdout=subprocess.DEVNULL)
     except FileNotFoundError:
-        show_error("Quarto is not installed and/or it is not present in the SYSTEM PATH variable. Please install Quarto before proceeding.")
+        show_error("Please install Quarto and add to PATH.")
         sys.exit(1)
+
     try:
-        subprocess.run(['R', '--version'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print("R is installed.")
+        subprocess.run(["R","--version"], check=True, stdout=subprocess.DEVNULL)
     except FileNotFoundError:
-        show_error("R is not installed and/or it is not present in the SYSTEM PATH variable. Please install R before proceeding.")
+        show_error("Please install R and add to PATH.")
         sys.exit(1)
-    
-check_dependencies()
+
+    # --- NEW: Ensure Jupyter & Python kernel support for dynamic dashboards ---
+    try:
+        # this will fail if jupyter-cli or jupyter-client isn't installed
+        subprocess.run(["jupyter","--version"], check=True, stdout=subprocess.DEVNULL)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        root = tk.Tk(); root.withdraw()
+        install = messagebox.askyesno(
+            "Jupyter Missing",
+            "Dynamic dashboards require Jupyter (notebook, ipykernel, jupyter-client).\n"
+            "Would you like to install them now?"
+        )
+        root.destroy()
+        if install:
+            # install packages into the current Python environment
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install",
+                "notebook", "ipykernel", "jupyter-client"
+            ])
+            # register a user‐level kernel named 'quarto-env'
+            subprocess.check_call([
+                sys.executable, "-m", "ipykernel", "install",
+                "--user", "--name", "quarto-env", "--display-name", "Quarto-Python"
+            ])
+        else:
+            show_error("Jupyter support is required for dynamic dashboards. Exiting.")
+            sys.exit(1)
 
 def get_cpu_name():
     try:
@@ -76,36 +209,24 @@ def get_total_ram():
         return "N/A"
     return "N/A"
 
-def check_quarto_processes():
-    try:
-        tasks = subprocess.check_output(["tasklist", "/FI", "IMAGENAME eq quarto.exe"], universal_newlines=True)
-        if "quarto.exe" in tasks.lower():
-            consent = input(
-                "Found running Quarto process(es) that may host a dashboard preview. "
-                "Do you consent to close them? (y/N): "
-            )
-            if consent.strip().lower() == "y":
-                subprocess.call(["taskkill", "/F", "/IM", "quarto.exe"])
-                print("Closed all Quarto processes.")
-            else:
-                print("Quarto processes were not closed. This may result in the dashboard not being made depending on your system configuration. If this issue presents, then rerun this script and give consent to close the Quarto processes.")
-    except Exception as e:
-        print(f"Error checking Quarto processes: {e}")
-
 def main():
     master_start = datetime.datetime.now()
     current_dir = os.path.dirname(os.path.abspath(__file__))
     scripts_dir = os.path.join(current_dir, 'scripts')
+    check_dependencies()
+    # GUI root for any further prompts:
+    root = tk.Tk(); root.withdraw()
+
     check_quarto_processes()
     
     ipy_files = [
-        os.path.join(scripts_dir, 'clean.ipy'),
-        os.path.join(scripts_dir, 'averageengagement.ipy'),
-        os.path.join(scripts_dir, 'mediareach.ipy'),
-        os.path.join(scripts_dir, 'feedvsreel.ipy'),
-        os.path.join(scripts_dir, 'age.ipy'),
-        os.path.join(scripts_dir, 'reportgeneration.ipy'),
-        os.path.join(scripts_dir, 'dashboardgeneration.ipy'),
+        os.path.join(scripts_dir, 'clean.py'),
+        os.path.join(scripts_dir, 'averageengagement.py'),
+        os.path.join(scripts_dir, 'mediareach.py'),
+        os.path.join(scripts_dir, 'feedvsreel.py'),
+        os.path.join(scripts_dir, 'age.py'),
+        os.path.join(scripts_dir, 'reportgeneration.py'),
+        os.path.join(scripts_dir, 'dashboardgeneration.py'),
         # Add more scripts in the desired order if needed.
     ]
     
@@ -120,11 +241,14 @@ def main():
         key=lambda f: os.path.getmtime(os.path.join(log_dir, f))
     )
     if len(log_files) >= 10:
-        consent_cleanup = input(
-            f"There are {len(log_files)} log files in {log_dir}. "
-            f"Would you like to delete the oldest log file ({log_files[0]})? (y/N): "
+        root = tk.Tk()
+        root.withdraw()
+        consent_cleanup = messagebox.askyesno(
+            "Log Cleanup",
+            f"There are {len(log_files)} log files in {log_dir}.\nWould you like to delete the oldest log file ({log_files[0]})?"
         )
-        if consent_cleanup.strip().lower() == "y":
+        root.destroy()
+        if consent_cleanup:
             oldest_log = os.path.join(log_dir, log_files[0])
             try:
                 os.remove(oldest_log)
@@ -143,11 +267,14 @@ def main():
     
     timestamp = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
     log_file_path = os.path.join(log_dir, f"log_{timestamp}.txt")
-    consent_input = input(
-        "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) "
-        "for logging purposes. Do you consent? (y/N): "
+    root = tk.Tk()
+    root.withdraw()
+    consent_input = messagebox.askyesno(
+        "Debug Consent",
+        "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) for logging purposes.\nDo you consent?"
     )
-    debug_consent = consent_input.strip().lower() == "y"
+    root.destroy()
+    debug_consent = consent_input
     progress.update(1)
     
     with open(log_file_path, 'w') as log_file:
@@ -174,24 +301,22 @@ def main():
                         break  
                     except ModuleNotFoundError as e:
                         missing_module = e.name if hasattr(e, "name") else str(e).split("'")[1]
-                        sys.__stdout__.write(
-                            f"Module '{missing_module}' is missing when running {ipy_file}.\n"
-                            "Would you like to install it? (y/N): "
+                        root = tk.Tk()
+                        root.withdraw()
+                        answer = messagebox.askyesno(
+                            "Missing Module",
+                            f"Module '{missing_module}' is missing when running {ipy_file}.\nWould you like to install it?"
                         )
-                        sys.__stdout__.flush()
-                        answer = sys.__stdin__.readline().strip()
-                        if answer.lower() == "y":
+                        root.destroy()
+                        if answer:
                             try:
                                 subprocess.check_call([sys.executable, "-m", "pip", "install", missing_module])
-                                sys.__stdout__.write(f"Module '{missing_module}' installed. Retrying {ipy_file}...\n")
-                                sys.__stdout__.flush()
+                                print(f"Module '{missing_module}' installed. Retrying {ipy_file}...")
                             except Exception as e2:
-                                sys.__stdout__.write(f"Error installing '{missing_module}': {e2}\n")
-                                sys.__stdout__.flush()
+                                print(f"Error installing '{missing_module}': {e2}")
                                 break  
                         else:
-                            sys.__stdout__.write("Skipping installation and continuing.\n")
-                            sys.__stdout__.flush()
+                            print("Skipping installation and continuing.")
                             break  
                     except Exception as e:
                         print(f"Error running {ipy_file}: {e}")
