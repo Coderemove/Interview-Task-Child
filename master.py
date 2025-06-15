@@ -88,7 +88,7 @@ def check_quarto_processes():
                 subprocess.call(["taskkill", "/F", "/IM", "quarto.exe"])
                 print("Closed all Quarto processes.")
             else:
-                print("Quarto processes were not closed. They may interfere with the new dashboard preview.")
+                print("Quarto processes were not closed. This may result in the dashboard not being made depending on your system configuration. If this issue presents, then rerun this script and give consent to close the Quarto processes.")
     except Exception as e:
         print(f"Error checking Quarto processes: {e}")
 
@@ -103,6 +103,7 @@ def main():
         os.path.join(scripts_dir, 'averageengagement.ipy'),
         os.path.join(scripts_dir, 'mediareach.ipy'),
         os.path.join(scripts_dir, 'feedvsreel.ipy'),
+        os.path.join(scripts_dir, 'age.ipy'),
         os.path.join(scripts_dir, 'reportgeneration.ipy'),
         os.path.join(scripts_dir, 'dashboardgeneration.ipy'),
         # Add more scripts in the desired order if needed.
