@@ -102,6 +102,7 @@ def main():
         os.path.join(scripts_dir, 'clean.ipy'),
         os.path.join(scripts_dir, 'averageengagement.ipy'),
         os.path.join(scripts_dir, 'mediareach.ipy'),
+        os.path.join(scripts_dir, 'feedvsreel.ipy'),
         os.path.join(scripts_dir, 'reportgeneration.ipy'),
         os.path.join(scripts_dir, 'dashboardgeneration.ipy'),
         # Add more scripts in the desired order if needed.

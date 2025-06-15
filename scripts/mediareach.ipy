@@ -25,7 +25,7 @@ plt.plot(monthly_avg['Month'], monthly_avg['Media reach'], marker='o', linestyle
 plt.title('Average Media Reach by Month')
 plt.xlabel('Month')
 plt.ylabel('Average Media Reach')
-plt.grid(True)
+plt.grid(False)
 plt.savefig('graphs/graph2_monthly.png')
 plt.close()
 
@@ -35,7 +35,7 @@ plt.plot(weekly_avg['Week'], weekly_avg['Media reach'], marker='o', linestyle='-
 plt.title('Average Media Reach by Week')
 plt.xlabel('Week')
 plt.ylabel('Average Media Reach')
-plt.grid(True)
+plt.grid(False)
 plt.savefig('graphs/graph2_weekly.png')
 plt.close()
 

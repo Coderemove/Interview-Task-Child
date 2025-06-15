@@ -69,6 +69,33 @@ Therefore, its fair to say that media reach doesn't have a clear impact on engag
 If you are interested in the exact statistical values, they are available in the logs.
 
 ## Reels vs Feed Posts
+I found a potential lead on why the engagement dropped on 2024-11. There was a significant increase in posts.
+
+```{{python}}
+import os
+from IPython.display import Image, display
+img_path = os.path.join("graphs", "graph3.png")
+display(Image(filename=img_path))
+```
+
+Now, the data sample is a bit too small for its to be statistically significant, therefore it could be a unrelated, but a massive increase of posts does correlate in decrease of engagement. 
+However, the overall media reach of posts for the month did not change. It is possible that the decrease in engagement, and the samme levels of media reach, could have resulted in a drop of visibility of the account.
+Some websites do suggest that Instagram will reduce the visibility of accounts that post too much, and so it is possible that this is the case here.
+Furthermore, the decrease in engagement could have swayed the algorithm to show less of the posts.
+
+## Possible Solutions
+**Diversify the social media websites used to promote the content.**
+One of the possible solutions I thought of, upon checking the age demographics, was to look into why that demographic might not be as engaged with Instagram.
+```{{python}}
+import os
+from IPython.display import Image, display
+img_path = os.path.join("graphs", "graph4.png")
+display(Image(filename=img_path))
+```
+The age demographic of users shows that they are mostly 
+This paper https://onlinelibrary.wiley.com/doi/abs/10.1002/mar.21499 suggests that one of the factors in why the users might not engage with content is lack of privacy and trust in the platform and the advertiser.
+
+
 
 
 <!-- Outline your analysis and include any details required.
