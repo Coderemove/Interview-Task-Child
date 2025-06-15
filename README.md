@@ -1,5 +1,5 @@
 # Interview-Task-Child
-Interview Task for My Thriving Task
+Interview Task for My Thriving Child Task
 
 # Dependencies:
  - Python 3.13.4+ - https://www.python.org/downloads/
