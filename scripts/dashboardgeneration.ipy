@@ -2,12 +2,14 @@ import subprocess
 import time
 import os
 import sys
+import webbrowser
+
 
 def create_dashboard_qmd():
     dashboard_content = """---
 title: "Interactive Dashboard"
 format: html
-  theme: lumen
+theme: lumen
 editor: visual
 dashboard: true
 ---
@@ -15,17 +17,6 @@ dashboard: true
 # Dashboard Overview
 
 This interactive dashboard was generated automatically using Quarto.
-
-## System Information
-
-Below is some system information:
-
-```{python}
-import platform, sys, datetime
-print("Operating System:", platform.system(), platform.release())
-print("Python Version:", sys.version.split()[0])
-print("Current Date & Time:", datetime.datetime.now())
-```
 
 ## Analysis Results
 

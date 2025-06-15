@@ -1,9 +1,9 @@
 import datetime
-import platform
 import subprocess
 import sys
 import webbrowser
 import os
+from bs4 import BeautifulSoup
 
 def create_report_qmd():
     # Collect required system and project information
@@ -16,7 +16,6 @@ def create_report_qmd():
         sys.exit(1)
 
     # Define the QMD content with placeholders.
-    # You can add additional sections or code blocks as needed.
     report_content = f"""---
 title: "{report_title}"
 author: "{author}"
@@ -29,12 +28,10 @@ theme: lumen
 
 This report was generated using code in the reposistory <https://github.com/Coderemove/Interview-Task-Child>.
 
-
 # Project Information
 
 This project was made by Szymon Fedyk as part of an interview task for My Thiving Child. The goal was to analyze Instagram data and generate insights as per the instructions provided.
-The main 
-
+   
 # Instagram Data Analysis
 
 ## Cleaning
@@ -66,7 +63,7 @@ display(Image(filename=img_path))
 ```
 
 To allow a fair comparison between the media reach and engagement, I also tested for significance between the weekly and monthly media reach, and found that there was no significant difference between the two.
-Therefore, its fair to say that media reach doesn't have a clear impact on engagement.
+Therefore, it's fair to say that media reach doesn't have a clear impact on engagement.
 If you are interested in the exact statistical values, they are available in the logs.
 
 ## Reels vs Feed Posts
@@ -79,8 +76,8 @@ img_path = os.path.join("graphs", "graph3.png")
 display(Image(filename=img_path))
 ```
 
-Now, the data sample is a bit too small for its to be statistically significant, therefore it could be a unrelated, but a massive increase of posts does correlate in decrease of engagement. 
-However, the overall media reach of posts for the month did not change. It is possible that the decrease in engagement, and the samme levels of media reach, could have resulted in a drop of visibility of the account.
+Now, the data sample is a bit too small for it to be statistically significant, therefore it could be an unrelated, but a massive increase of posts does correlate with a decrease of engagement. 
+However, the overall media reach of posts for the month did not change. It is possible that the decrease in engagement, and the same levels of media reach, could have resulted in a drop of visibility of the account.
 Some websites do suggest that Instagram will reduce the visibility of accounts that post too much, and so it is possible that this is the case here.
 Furthermore, the decrease in engagement could have swayed the algorithm to show less of the posts.
 
@@ -101,13 +98,11 @@ display(Image(filename=img_path))
 This paper <https://onlinelibrary.wiley.com/doi/abs/10.1002/mar.21499> suggests that one of the factors in why the users might not engage with content is lack of privacy and trust in the platform and the advertiser.
 Furthermore, <https://www.statista.com/statistics/1440802/privacy-actions-taken-internet-users-global-by-age/#:~:text=As%20of%20June%202023%2C%20roughly%2038%20percent,steps%20regarding%20their%20privacy%20on%20the%20internet.> shows that 45% of the largest user age group cares about privacy on the internet.
 Since last year, Instagram has been under fire for its privacy policies, and so it is possible that the users are not engaging with the content due to that.
-
+   
 I have not looked into the linked facebook dataset, due to the limitations of the timeframe, but one of the possible solutions would be to post the media content onto Tiktok.
-Its not to say that Tiktok is a perfect, or even better platform when it comes to privacy, but it is still a platform with a very large user base. The user base does favour younger audiences, but some sites do claim that around 15-25% of the user base are adults between 35-44.
-
-
+It's not to say that Tiktok is a perfect, or even better platform when it comes to privacy, but it is still a platform with a very large user base.
+   
 """
-
     # Write the report.qmd file.
     with open("report.qmd", "w", encoding="utf-8") as f:
         f.write(report_content)
@@ -122,10 +117,62 @@ def render_report():
         print(f"Error generating report: {e}")
         sys.exit(1)
 
+def inject_mode_buttons():
+    # Open the existing report.html file
+    with open("report.html", "r", encoding="utf-8") as file:
+        soup = BeautifulSoup(file, "html.parser")
+
+    # Define the snippet to inject
+    mode_buttons_html = """
+<style>
+  /* Dark mode styling */
+  .dark-mode {
+    background-color: #121212;
+    color: #ffffff;
+  }
+  /* Invert colours of images (graphs) in dark mode */
+  .dark-mode img {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  /* Style for the toggle buttons */
+  .mode-toggle {
+    margin: 0.5rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+  }
+</style>
+
+<div id="mode-buttons">
+  <button id="btn-light" class="mode-toggle btn btn-light">Light Mode</button>
+  <button id="btn-dark" class="mode-toggle btn btn-dark">Dark Mode</button>
+</div>
+
+<script>
+  // Toggle dark mode on button clicks
+  document.getElementById("btn-light").addEventListener("click", function() {
+    document.body.classList.remove("dark-mode");
+  });
+  document.getElementById("btn-dark").addEventListener("click", function() {
+    document.body.classList.add("dark-mode");
+  });
+</script>
+"""
+    # Insert the snippet at the top of the body tag
+    if soup.body:
+        soup.body.insert(0, BeautifulSoup(mode_buttons_html, "html.parser"))
+    else:
+        print("No <body> tag found in the HTML file.")
+        
+    # Write the modified HTML back to the original file
+    with open("report.html", "w", encoding="utf-8") as file:
+        file.write(str(soup))
+    print("Injected light/dark mode buttons into report.html.")
+
 if __name__ == "__main__":
     create_report_qmd()
     render_report()
-
-    # Open the generated report in the default web browser
+    inject_mode_buttons()
+    
+    # Open the modified report in the default web browser
     report_path = os.path.abspath('report.html')
     webbrowser.open_new_tab('file://' + report_path)
