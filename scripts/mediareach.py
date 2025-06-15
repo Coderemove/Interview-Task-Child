@@ -1,10 +1,10 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import f_oneway
+from path_utils import safe_read_csv, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
 
-# Load your dataset
-# filepath: c:\Users\Code\Desktop\Interview Task\Interview-Task-Child\data.csv
-df = pd.read_csv('dataset/Instagram Post Engagement.csv')
+# Load your dataset using safe path management
+df = safe_read_csv(DATASET_KEYS['INSTAGRAM_POST_ENGAGEMENT'])
 
 # Ensure 'Media reach' column has no missing values
 df = df.dropna(subset=['Media reach'])
@@ -26,7 +26,11 @@ plt.title('Average Media Reach by Month')
 plt.xlabel('Month')
 plt.ylabel('Average Media Reach')
 plt.grid(False)
-plt.savefig('graphs/graph2_monthly.png')
+
+# Save using safe path management
+monthly_output_path = get_output_path(DIRECTORY_KEYS['GRAPHS'], 'graph2_monthly.png')
+plt.savefig(monthly_output_path)
+print(f"✓ Saved monthly chart: {monthly_output_path}")
 plt.close()
 
 # Save Weekly Graph
@@ -36,7 +40,11 @@ plt.title('Average Media Reach by Week')
 plt.xlabel('Week')
 plt.ylabel('Average Media Reach')
 plt.grid(False)
-plt.savefig('graphs/graph2_weekly.png')
+
+# Save using safe path management
+weekly_output_path = get_output_path(DIRECTORY_KEYS['GRAPHS'], 'graph2_weekly.png')
+plt.savefig(weekly_output_path)
+print(f"✓ Saved weekly chart: {weekly_output_path}")
 plt.close()
 
 # Compare Monthly and Weekly Results
@@ -55,6 +63,8 @@ if p_value < 0.05:
     print(f"Significant difference detected between monthly and weekly averages (F-statistic: {f_stat:.2f}, p-value: {p_value:.4f})")
 else:
     print(f"No significant difference detected between monthly and weekly averages (F-statistic: {f_stat:.2f}, p-value: {p_value:.4f})")
+
+print("✓ Media reach analysis completed successfully")
 
 
 

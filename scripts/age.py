@@ -2,9 +2,10 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from path_utils import safe_read_csv, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
 
-# Read the CSV file
-df = pd.read_csv("dataset/Instagram Age Gender Demographi.csv")
+# Read the CSV file using safe path management
+df = safe_read_csv(DATASET_KEYS['INSTAGRAM_AGE_GENDER'])
 
 # Convert the Profile followers column to numeric values
 df['Profile followers'] = pd.to_numeric(df['Profile followers'], errors='coerce')
@@ -19,11 +20,6 @@ for gender in genders:
     gender_followers = df[df['Gender'] == gender]['Profile followers'].sum()
     percentage = (gender_followers / total_followers) * 100 if total_followers > 0 else 0
     print(f"{gender.capitalize()} contributes {gender_followers} followers ({percentage:.1f}%).")
-
-# Create the output folder if it doesn't exist
-output_folder = "graphs"
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
 
 def make_autopct(values):
     def my_autopct(pct):
@@ -55,9 +51,13 @@ for gender in genders:
     # Add a legend on the side for better readability
     ax.legend(wedges, age_distribution.index, title="Age Groups", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
     
-    # Save the figure into the 'graphs' folder
-    filename = os.path.join(output_folder, f"graph4_{gender}.png")
-    plt.savefig(filename, bbox_inches="tight")
+    # Save the figure using safe path management
+    filename = f"graph4_{gender}.png"
+    output_path = get_output_path(DIRECTORY_KEYS['GRAPHS'], filename)
+    plt.savefig(output_path, bbox_inches="tight")
+    print(f"✓ Saved chart: {output_path}")
     plt.close(fig)
+
+print("✓ Age analysis completed successfully")
 
 

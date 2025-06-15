@@ -1,41 +1,26 @@
 import pandas as pd
 import os
+from path_utils import get_dataset_path, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
 
 def load_excel_sheets(file_path):
-    """
-    Reads an Excel file and returns a dictionary of DataFrames keyed by sheet name.
-    """
+    """Reads an Excel file and returns a dictionary of DataFrames keyed by sheet name."""
     xl = pd.ExcelFile(file_path)
     sheets_dict = {sheet: xl.parse(sheet) for sheet in xl.sheet_names}
     return sheets_dict
 
 def check_sheet_duplicates(sheet_name, df):
-    """
-    Print duplicate details for the sheet using the 'RowHash' column.
-    """
-    print(f"Sheet: {sheet_name}")
+    """Print duplicate details for the sheet using the 'RowHash' column."""
     if 'RowHash' not in df.columns:
-        print("Column 'RowHash' not found in this sheet.\n")
+        print(f"No 'RowHash' column found in sheet: {sheet_name}")
         return
-
-    duplicate_count = df.duplicated(subset='RowHash', keep='first').sum()
-    print(f"Total duplicate entries in 'RowHash': {duplicate_count}")
     
-    duplicates = df[df.duplicated(subset='RowHash', keep=False)]
+    duplicates = df[df.duplicated(subset=['RowHash'], keep=False)]
     if duplicates.empty:
-        print("No duplicate rows found.\n")
-        return
-
-    grouped = duplicates.groupby('RowHash')
-    for rowhash, group in grouped:
-        if len(group) > 1:
-            first_row = group.iloc[0].drop('RowHash')
-            identical = True
-            for _, row in group.iloc[1:].iterrows():
-                if not row.drop('RowHash').equals(first_row):
-                    identical = False
-                    break
-            if identical:
+        print(f"No duplicates found in sheet: {sheet_name}")
+    else:
+        print(f"Duplicates found in sheet: {sheet_name}")
+        for rowhash, group in duplicates.groupby('RowHash'):
+            if group.drop_duplicates().shape[0] == 1:
                 print(f"Identical duplicates found for RowHash: {rowhash}")
             else:
                 print(f"Non-identical duplicates found for RowHash: {rowhash}")
@@ -43,56 +28,73 @@ def check_sheet_duplicates(sheet_name, df):
     print("\n")
 
 def remove_sheet_duplicates(sheet_name, df):
-    """
-    Remove duplicate rows from df using the 'RowHash' column (keeps first occurrence)
-    and print how many rows were removed.
-    """
-    print(f"Cleaning sheet: {sheet_name}")
+    """Remove duplicates from the sheet based on the 'RowHash' column."""
     if 'RowHash' not in df.columns:
-        print("Column 'RowHash' not found. Skipping cleaning.\n")
+        print(f"No 'RowHash' column found in sheet: {sheet_name}. Skipping duplicate removal.")
         return df
-
-    initial_count = len(df)
-    df_cleaned = df.drop_duplicates(subset='RowHash', keep='first')
-    removed_count = initial_count - len(df_cleaned)
-    print(f"Removed {removed_count} duplicate row(s) based on 'RowHash'.\n")
+    
+    original_count = len(df)
+    df_cleaned = df.drop_duplicates(subset=['RowHash'])
+    removed_count = original_count - len(df_cleaned)
+    
+    if removed_count > 0:
+        print(f"Removed {removed_count} duplicate(s) from sheet: {sheet_name}")
+    else:
+        print(f"No duplicates removed from sheet: {sheet_name}")
+    
     return df_cleaned
 
-excel_file = 'dataset/Copy of Instagram_Analytics - DO NOT DELETE (for interview purposes).xlsx'
-excel_sheets = load_excel_sheets(excel_file)
-excel_sheets.pop('SupermetricsQueries', None)
+# Main execution
+try:
+    # Use centralized path management
+    excel_file_path = get_dataset_path(DATASET_KEYS['INSTAGRAM_ANALYTICS_EXCEL'])
+    excel_sheets = load_excel_sheets(excel_file_path)
+    
+    # Remove unwanted sheets
+    excel_sheets.pop('SupermetricsQueries', None)
 
-for sheet_name, df in excel_sheets.items():
-    check_sheet_duplicates(sheet_name, df)
+    # Check for duplicates
+    for sheet_name, df in excel_sheets.items():
+        check_sheet_duplicates(sheet_name, df)
 
-for sheet_name, df in excel_sheets.items():
-    excel_sheets[sheet_name] = remove_sheet_duplicates(sheet_name, df)
+    # Remove duplicates
+    for sheet_name, df in excel_sheets.items():
+        excel_sheets[sheet_name] = remove_sheet_duplicates(sheet_name, df)
 
-if "Instagram Top Cities Regions" in excel_sheets:
-    df = excel_sheets["Instagram Top Cities Regions"]
-    if "City" in df.columns:
-        df = df.drop(columns=["City"])
-        excel_sheets["Instagram Top Cities Regions"] = df
-        print("Removed 'City' column from 'Instagram Top Cities Regions' sheet.\n")
+    # Clean specific sheets
+    if "Instagram Top Cities Regions" in excel_sheets:
+        df = excel_sheets["Instagram Top Cities Regions"]
+        if "City" in df.columns:
+            df = df.drop(columns=["City"])
+            excel_sheets["Instagram Top Cities Regions"] = df
+            print("Removed 'City' column from 'Instagram Top Cities Regions' sheet.\n")
 
-for sheet_name, df in excel_sheets.items():
-    if "RowHash" in df.columns:
-        df = df.drop(columns=["RowHash"])
-        excel_sheets[sheet_name] = df
-        print(f"Removed 'RowHash' column from sheet: {sheet_name}\n")
+    # Remove RowHash columns
+    for sheet_name, df in excel_sheets.items():
+        if "RowHash" in df.columns:
+            df = df.drop(columns=["RowHash"])
+            excel_sheets[sheet_name] = df
+            print(f"Removed 'RowHash' column from sheet: {sheet_name}\n")
 
-if "Instagram Post Engagement" in excel_sheets:
-    df = excel_sheets["Instagram Post Engagement"]
-    if "Media ID" in df.columns:
-        df = df.drop(columns=["Media ID"])
-        excel_sheets["Instagram Post Engagement"] = df
-        print("Dropped 'Media ID' column from 'Instagram Post Engagement' sheet.\n")
+    # Clean Instagram Post Engagement
+    if "Instagram Post Engagement" in excel_sheets:
+        df = excel_sheets["Instagram Post Engagement"]
+        if "Media ID" in df.columns:
+            df = df.drop(columns=["Media ID"])
+            excel_sheets["Instagram Post Engagement"] = df
+            print("Dropped 'Media ID' column from 'Instagram Post Engagement' sheet.\n")
 
-output_folder = "dataset"
-for sheet_name, df in excel_sheets.items():
-    output_path = os.path.join(output_folder, f"{sheet_name}.csv")
-    df.to_csv(output_path, index=False)
-    print(f"Exported sheet '{sheet_name}' to {output_path}\n")
+    # Export cleaned data using safe paths
+    for sheet_name, df in excel_sheets.items():
+        safe_filename = f"{sheet_name}.csv"
+        output_path = get_output_path(DIRECTORY_KEYS['DATASET'], safe_filename)
+        df.to_csv(output_path, index=False)
+        print(f"Exported sheet '{sheet_name}' to {output_path}\n")
+        
+except Exception as e:
+    print(f"Error in clean.py: {e}")
+    import traceback
+    traceback.print_exc()
 
 
 

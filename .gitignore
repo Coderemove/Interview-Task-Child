@@ -1,13 +1,10 @@
-# Ignoring the dataset folder to avoid publishing raw data
-# To get compile cleaned data used in the report, download the original UNEDITED dataset and place it in the dataset folder
-# Then, run the master.ipy
 dataset/
 log/
-# Logs are for debugging purposes
-# Including the report to avoid publishing sensitive information
 report.*
 report/
 report_files/
 dashboard.*
 dashboard_files/
 graphs/
+scripts/__pycache__
+path_config.json

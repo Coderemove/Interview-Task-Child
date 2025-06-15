@@ -6,12 +6,24 @@ from rpy2.robjects import pandas2ri
 from rpy2.robjects.conversion import localconverter
 from rpy2.robjects.vectors import FloatVector
 from rpy2.robjects.packages import importr
+import re
+from path_utils import safe_read_csv, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
 
 os.environ["RPY2_CFFI_MODE"] = "ABI"
 required_packages = ["ggplot2", "dplyr", "stats"]
 
+def validate_r_package_name(pkg):
+    """Validate R package names"""
+    import re
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9.]*$', pkg):
+        raise ValueError(f"Invalid R package name: {pkg}")
+    return pkg
+
+# Validate packages before use
+validated_packages = [validate_r_package_name(pkg) for pkg in required_packages]
+
 ro.r(f'''
-packages <- c({", ".join([f'"{pkg}"' for pkg in required_packages])})
+packages <- c({", ".join([f'"{pkg}"' for pkg in validated_packages])})
 installed <- rownames(installed.packages())
 for (pkg in packages) {{
   if (!pkg %in% installed) {{
@@ -20,9 +32,10 @@ for (pkg in packages) {{
 }}
 ''')
 
-r_libs = {pkg: importr(pkg) for pkg in required_packages}
+r_libs = {pkg: importr(pkg) for pkg in validated_packages}
 
-df = pd.read_csv('dataset/Instagram Post Engagement.csv')
+# Read the CSV file using safe path management
+df = safe_read_csv(DATASET_KEYS['INSTAGRAM_POST_ENGAGEMENT'])
 
 df = df[df['Media product type'].isin(['FEED', 'REELS'])]
 
@@ -90,9 +103,13 @@ plt.xticks(rotation=45)
 plt.legend()
 plt.tight_layout()
 
-if not os.path.exists("graphs"):
-    os.makedirs("graphs")
-plt.savefig(os.path.join("graphs", "graph1.png"))
+# Save the figure using safe path management
+output_path = get_output_path(DIRECTORY_KEYS['GRAPHS'], "graph1.png")
+plt.savefig(output_path)
+print(f"✓ Saved chart: {output_path}")
+plt.close()
+
+print("✓ Average engagement analysis completed successfully")
 
 
 
