@@ -1,5 +1,8 @@
 import sys
 import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import ctypes
 import platform
 import subprocess
@@ -9,9 +12,6 @@ from tkinter import messagebox
 from contextlib import redirect_stdout, redirect_stderr
 from tqdm import tqdm
 import runpy
-import socket
-import webbrowser
-import signal
 import threading
 import psutil
 import time
@@ -171,7 +171,7 @@ class ResourceMonitor:
             ], capture_output=True, text=True, timeout=5)
             
             if result.returncode == 0:
-                import json
+                # Use the globally imported json module
                 data = json.loads(result.stdout)
                 if 'engines' in data:
                     util = data.get('engines', {}).get('Render/3D', {}).get('busy', 0)
@@ -236,7 +236,7 @@ class ResourceMonitor:
 def run_as_admin(cmd, args):
     """Safely run command with UAC elevation"""
     # Validate command is in allowed list
-    allowed_commands = ["taskkill", "netsh"]
+    allowed_commands = ["taskkill"]
     if cmd not in allowed_commands:
         raise ValueError(f"Command {cmd} not allowed")
     
@@ -265,73 +265,6 @@ def check_quarto_processes():
     except Exception as e:
         print("Error checking/killing Quarto:", e)
 
-def find_free_port():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
-
-def add_firewall_rule(port):
-    rule = f"QuartoPreview_{port}"
-    args = [
-        "advfirewall","firewall","add","rule",
-        f"name={rule}",
-        "dir=in","action=allow","protocol=TCP",
-        f"localport={port}",
-        "remoteip=127.0.0.1",
-        "profile=Private"
-    ]
-    run_as_admin("netsh", args)
-    return rule
-
-def remove_firewall_rule(rule, port):
-    args = [
-        "advfirewall","firewall","delete","rule",
-        f"name={rule}",
-        "protocol=TCP",
-        f"localport={port}"
-    ]
-    run_as_admin("netsh", args)
-
-def run_dashboard():
-    port = find_free_port()
-    rule = add_firewall_rule(port)
-
-    cmd = [
-      "quarto", "preview", "dashboard.qmd",
-      "--port", str(port),
-      "--no-browser"
-    ]
-    proc = subprocess.Popen(cmd, shell=False)
-    webbrowser.open(f"http://127.0.0.1:{port}")
-
-    # Cleanup function to terminate Quarto and remove firewall rule
-    def cleanup():
-        if proc.poll() is None:
-            proc.terminate()
-        remove_firewall_rule(rule, port)
-
-    # Handler for signals (Ctrl+C or termination)
-    def on_exit(signum=None, frame=None):
-        cleanup()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, on_exit)
-    signal.signal(signal.SIGTERM, on_exit)
-
-    # Schedule automatic cleanup after 1 hour (3600 seconds)
-    timer = threading.Timer(3600, on_exit)
-    timer.daemon = True
-    timer.start()
-
-    # Wait for Quarto to exit; then cancel the timer and clean up
-    proc.wait()
-    timer.cancel()
-    cleanup()
-
-#––– your existing non‐privileged functions below –––
-
 def show_error(msg):
     tk.Tk().withdraw()
     messagebox.showerror("Dependency Error", msg)
@@ -349,32 +282,20 @@ def check_dependencies():
         show_error("Please install R and add to PATH.")
         sys.exit(1)
 
-    # --- NEW: Ensure Jupyter & Python kernel support for dynamic dashboards ---
+    # Check for plotly for dashboards
     try:
-        # this will fail if jupyter-cli or jupyter-client isn't installed
-        subprocess.run(["jupyter","--version"], check=True, stdout=subprocess.DEVNULL)
-    except (FileNotFoundError, subprocess.CalledProcessError):
+        import plotly
+    except ImportError:
         root = tk.Tk(); root.withdraw()
         install = messagebox.askyesno(
-            "Jupyter Missing",
-            "Dynamic dashboards require Jupyter (notebook, ipykernel, jupyter-client).\n"
-            "Would you like to install them now?"
+            "Plotly Missing",
+            "Dashboards require Plotly for visualization.\nWould you like to install it now?"
         )
         root.destroy()
         if install:
-            # install packages into the current Python environment
-            subprocess.check_call([
-                sys.executable, "-m", "pip", "install",
-                "notebook", "ipykernel", "jupyter-client", "psutil"
-            ])
-            # register a user‐level kernel named 'quarto-env'
-            subprocess.check_call([
-                sys.executable, "-m", "ipykernel", "install",
-                "--user", "--name", "quarto-env", "--display-name", "Quarto-Python"
-            ])
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "plotly"])
         else:
-            show_error("Jupyter support is required for dynamic dashboards. Exiting.")
-            sys.exit(1)
+            print("Warning: Dashboard functionality will be limited without Plotly.")
 
     # Check for psutil for resource monitoring
     try:
@@ -639,6 +560,19 @@ def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     scripts_dir = os.path.join(current_dir, 'scripts')
     
+    # Add scripts directory to Python path so other scripts can import path_utils
+    sys.path.insert(0, scripts_dir)
+    
+    # Ask for consent FIRST before any system information collection
+    root = tk.Tk()
+    root.withdraw()
+    consent_input = messagebox.askyesno(
+        "Debug Consent",
+        "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) for logging purposes.\nDo you consent?"
+    )
+    root.destroy()
+    debug_consent = consent_input
+    
     # Initialize path manager
     try:
         path_manager = PathManager(current_dir)
@@ -659,20 +593,6 @@ def main():
     except Exception as e:
         show_error(f"Project setup failed: {e}")
         sys.exit(1)
-    
-    master_start = datetime.datetime.now()
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    scripts_dir = os.path.join(current_dir, 'scripts')
-    
-    # Ask for consent FIRST before any system information collection
-    root = tk.Tk()
-    root.withdraw()
-    consent_input = messagebox.askyesno(
-        "Debug Consent",
-        "This script collects non-identifiable debugging information (OS, CPU, GPU, RAM, Python Version) for logging purposes.\nDo you consent?"
-    )
-    root.destroy()
-    debug_consent = consent_input
     
     check_dependencies()
     
@@ -776,6 +696,13 @@ def main():
                         break  
                     except ModuleNotFoundError as e:
                         missing_module = e.name if hasattr(e, "name") else str(e).split("'")[1]
+                        
+                        # Skip path_utils since it's a local module
+                        if missing_module == 'path_utils':
+                            print(f"ERROR: {script_name} cannot find path_utils.py")
+                            print("Please ensure path_utils.py exists in the scripts directory")
+                            break
+                            
                         root = tk.Tk()
                         root.withdraw()
                         answer = messagebox.askyesno(
@@ -793,7 +720,7 @@ def main():
                                 break  
                         else:
                             print("Skipping installation and continuing.")
-                            break  
+                            break
                     except Exception as e:
                         print(f"ERROR in {script_name}: {e}")
                         import traceback

@@ -8,3 +8,4 @@ dashboard_files/
 graphs/
 scripts/__pycache__
 path_config.json
+app.py

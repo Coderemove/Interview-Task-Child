@@ -1,6 +1,14 @@
-import pandas as pd
+import sys
 import os
-from path_utils import get_dataset_path, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
+import pandas as pd
+
+# Add scripts directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
+# Now import path_utils - ADD get_dataset_path to the import
+from path_utils import safe_read_csv, get_output_path, get_dataset_path, DATASET_KEYS, DIRECTORY_KEYS
 
 def load_excel_sheets(file_path):
     """Reads an Excel file and returns a dictionary of DataFrames keyed by sheet name."""
@@ -90,6 +98,8 @@ try:
         output_path = get_output_path(DIRECTORY_KEYS['DATASET'], safe_filename)
         df.to_csv(output_path, index=False)
         print(f"Exported sheet '{sheet_name}' to {output_path}\n")
+        
+    print("✓ Data cleaning completed successfully")
         
 except Exception as e:
     print(f"Error in clean.py: {e}")

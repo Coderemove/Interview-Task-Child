@@ -1,3 +1,4 @@
+import sys
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -7,6 +8,13 @@ from rpy2.robjects.conversion import localconverter
 from rpy2.robjects.vectors import FloatVector
 from rpy2.robjects.packages import importr
 import re
+
+# Add scripts directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
+# Now import path_utils
 from path_utils import safe_read_csv, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
 
 os.environ["RPY2_CFFI_MODE"] = "ABI"

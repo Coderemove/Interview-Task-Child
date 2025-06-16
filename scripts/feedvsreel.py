@@ -1,5 +1,13 @@
+import sys
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# Add scripts directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
 from path_utils import safe_read_csv, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
 
 # Read the CSV file using safe path management

@@ -1,9 +1,15 @@
+import sys
+import os
 import datetime
 import subprocess
-import sys
 import webbrowser
-import os
 from bs4 import BeautifulSoup
+
+# Add scripts directory to path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
 from path_utils import get_output_path, DIRECTORY_KEYS
 
 def create_report_qmd():
@@ -157,7 +163,11 @@ It's not to say that Tiktok is a perfect, or even better platform when it comes 
     
     # Save the report file to project root using safe path management
     try:
-        report_path = get_output_path('..', "report.qmd")  # Save to project root
+        # Get the project root directory (parent of scripts directory)
+        scripts_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(scripts_dir)
+        report_path = os.path.join(project_root, "report.qmd")
+        
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_content)
         print(f"✓ Created report.qmd at: {report_path}")
@@ -168,12 +178,23 @@ It's not to say that Tiktok is a perfect, or even better platform when it comes 
 
 def render_report():
     try:
+        # We need to work from the directory where report.qmd was created
+        # The report.qmd should be in the project root already
+        scripts_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(scripts_dir)
+        report_path = os.path.join(project_root, "report.qmd")
+        
+        # Verify the report file exists
+        if not os.path.exists(report_path):
+            raise FileNotFoundError(f"Report file not found at: {report_path}")
+        
         # Change to project root directory for rendering
         original_dir = os.getcwd()
-        project_root = os.path.dirname(original_dir)
         
         try:
             os.chdir(project_root)
+            print(f"Changed to directory: {project_root}")
+            print(f"Rendering: {os.path.basename(report_path)}")
             
             # Validate command
             allowed_commands = ["quarto"]
@@ -193,6 +214,9 @@ def render_report():
             
     except subprocess.CalledProcessError as e:
         print(f"Error generating report: {e}")
+        # Show current directory and file listing for debugging
+        print(f"Current directory: {os.getcwd()}")
+        print(f"Files in current directory: {os.listdir('.')}")
         sys.exit(1)
     except Exception as e:
         print(f"Unexpected error during report rendering: {e}")

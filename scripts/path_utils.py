@@ -8,16 +8,21 @@ import sys
 import json
 import pandas as pd
 
+# Add the scripts directory to Python path so imports work from project root
+scripts_dir = os.path.dirname(os.path.abspath(__file__))
+if scripts_dir not in sys.path:
+    sys.path.insert(0, scripts_dir)
+
 def load_path_config():
     """Load path configuration from JSON file"""
-    # Look for config in parent directory (project root)
-    config_path = os.path.join('..', 'path_config.json')
-    if not os.path.exists(config_path):
-        config_path = 'path_config.json'  # Try current directory
+    # Look for config in project root (parent of scripts directory)
+    scripts_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(scripts_dir)
+    config_path = os.path.join(project_root, 'path_config.json')
     
     if not os.path.exists(config_path):
         raise FileNotFoundError(
-            "Path configuration not found. Please run master.py first to generate path_config.json"
+            f"Path configuration not found at {config_path}. Please run master.py first to generate path_config.json"
         )
         
     with open(config_path, 'r', encoding='utf-8') as f:
@@ -59,11 +64,14 @@ def get_output_path(directory_key, filename):
     """Get validated output path for saving files"""
     config = load_path_config()
     
-    if directory_key not in config['directories']:
+    # Handle special case for project root
+    if directory_key == '..':
+        output_dir = config['project_root']
+    elif directory_key not in config['directories']:
         available = list(config['directories'].keys())
         raise ValueError(f"Directory key '{directory_key}' not allowed. Available: {available}")
-        
-    output_dir = config['directories'][directory_key]
+    else:
+        output_dir = config['directories'][directory_key]
     
     # Sanitize filename
     safe_filename = _sanitize_filename(filename)
