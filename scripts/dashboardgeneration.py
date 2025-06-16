@@ -6,6 +6,8 @@ import webbrowser
 import pandas as pd
 import datetime
 import json
+import requests
+import hashlib # Add this for checksum calculation
 
 # Add scripts directory to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +15,86 @@ if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
 from path_utils import get_dataset_path, get_output_path, DATASET_KEYS, DIRECTORY_KEYS
+
+# --- Security Configuration for Plotly Download ---
+# Option: Pin to a specific version for better security and stability
+PLOTLY_VERSION = "3.0.1" # Example: Check Plotly's website for the latest stable version
+PLOTLY_JS_FILENAME = f"plotly-{PLOTLY_VERSION}.min.js"
+PLOTLY_CDN_URL = f"https://cdn.plot.ly/{PLOTLY_JS_FILENAME}"
+EXPECTED_PLOTLY_CHECKSUM = "A32E817BB121E9E89016CE4CEE85EE3F1C66F6A6C95C4B53A5F488F77756D7A4" 
+
+def calculate_sha256(filepath):
+    """Calculates the SHA256 checksum of a file."""
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+def download_plotly_js_secure(output_dir):
+    """
+    Downloads a specific version of plotly.min.js to the specified directory
+    and verifies its checksum.
+    """
+    plotly_js_path = os.path.join(output_dir, PLOTLY_JS_FILENAME)
+
+    if os.path.exists(plotly_js_path):
+        print(f"Verifying checksum of existing local file: {plotly_js_path}...")
+        local_checksum = calculate_sha256(plotly_js_path)
+        if local_checksum.lower() == EXPECTED_PLOTLY_CHECKSUM.lower():
+            print(f"✓ Checksum MATCHES. {PLOTLY_JS_FILENAME} is valid.")
+            return PLOTLY_JS_FILENAME
+        else:
+            print(f"✗ Checksum MISMATCH for existing {PLOTLY_JS_FILENAME}.")
+            print(f"  Expected: {EXPECTED_PLOTLY_CHECKSUM}")
+            print(f"  Found:    {local_checksum}")
+            print(f"  Attempting to re-download...")
+            try:
+                os.remove(plotly_js_path) # Remove corrupted/wrong version
+            except OSError as e:
+                print(f"✗ Error removing existing file {plotly_js_path}: {e}. Please remove it manually and retry.")
+                raise # Re-raise to stop execution if we can't remove the bad file
+
+    print(f"Downloading {PLOTLY_JS_FILENAME} (Version: {PLOTLY_VERSION}) to {output_dir}...")
+    try:
+        response = requests.get(PLOTLY_CDN_URL, timeout=30)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        # Temporarily save to verify checksum before final move (optional, but safer)
+        temp_plotly_js_path = plotly_js_path + ".tmp"
+        with open(temp_plotly_js_path, 'wb') as f:
+            f.write(response.content)
+        
+        print("Verifying checksum of downloaded file...")
+        downloaded_checksum = calculate_sha256(temp_plotly_js_path)
+
+        if downloaded_checksum.lower() == EXPECTED_PLOTLY_CHECKSUM.lower():
+            print(f"✓ Checksum MATCHES. {PLOTLY_JS_FILENAME} downloaded and verified successfully.")
+            os.rename(temp_plotly_js_path, plotly_js_path) # Move verified file
+            # Optional: Set read-only permissions (platform dependent)
+            # try:
+            #     os.chmod(plotly_js_path, 0o444) # Read-only for all
+            # except OSError:
+            #     print("Could not set read-only permissions (platform may not support or permission issue).")
+            return PLOTLY_JS_FILENAME
+        else:
+            os.remove(temp_plotly_js_path) # Clean up temp file
+            print(f"✗ CRITICAL: Checksum MISMATCH after download for {PLOTLY_JS_FILENAME}.")
+            print(f"  Expected: {EXPECTED_PLOTLY_CHECKSUM}")
+            print(f"  Found:    {downloaded_checksum}")
+            print("  The downloaded file might be corrupted or tampered with. ABORTING.")
+            print(f"  Please verify the version {PLOTLY_VERSION} and its checksum, or check your network security.")
+            raise ValueError(f"Plotly.js checksum verification failed for version {PLOTLY_VERSION}.")
+
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Failed to download {PLOTLY_JS_FILENAME}: {e}")
+        raise # Re-raise to stop execution
+    except Exception as e: # Catch other potential errors like file system issues
+        print(f"✗ An unexpected error occurred during Plotly download/verification: {e}")
+        if os.path.exists(temp_plotly_js_path):
+            os.remove(temp_plotly_js_path) # Ensure temp file is cleaned up
+        raise
 
 def create_dashboard_qmd():
     # Get the safe path to the dataset for use in the dashboard content
@@ -52,7 +134,49 @@ def create_dashboard_qmd():
     print(f"Available metrics: {available_metrics}")
     print(f"Sample data: {df.head(2).to_dict('records')}")
     
+    # Determine where dashboard.qmd will be saved (project root)
+    # This is also where plotly-latest.min.js should be.
+    
+    # CORRECT WAY to get the project root directory:
+    # Assuming 'scripts' is a subdirectory of the project root.
+    current_script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root_dir = os.path.abspath(os.path.join(current_script_dir, '..'))
+    
+    # Ensure the project root directory exists (it should, but good practice)
+    os.makedirs(project_root_dir, exist_ok=True)
+    print(f"Project root for Plotly download: {project_root_dir}") # Debug print
+
+    try:
+        # Download Plotly.js securely to the project_root_dir
+        local_plotly_js_file = download_plotly_js_secure(project_root_dir)
+    except Exception as e:
+        print(f"✗✗✗ FATAL ERROR: Could not obtain a secure copy of Plotly.js. Dashboard generation aborted. ✗✗✗")
+        print(f"Error details: {e}")
+        raise
+
     # Create dashboard content with proper structure
+    js_data_str = json.dumps(js_data_for_script, default=str)
+    js_periods_str = json.dumps(available_periods)
+    js_metrics_str = json.dumps(available_metrics)
+
+    script_data_injection = f"""
+      <script>
+        console.log("Starting data injection...");
+        try {{
+          window.rawData = {js_data_str};
+          window.availablePeriods = {js_periods_str};
+          window.availableMetrics = {js_metrics_str};
+          
+          console.log("Data injection successful");
+          console.log("Raw data length:", window.rawData?.length);
+          console.log("Available periods:", window.availablePeriods);
+          console.log("Available metrics:", window.availableMetrics);
+        }} catch(e) {{
+          console.error("Data injection failed:", e);
+        }}
+      </script>
+    """
+
     dashboard_content = f"""---
 title: "Interactive Instagram Analytics Dashboard"
 format:
@@ -122,40 +246,27 @@ dashboard_html = '''
                 <!-- Metric toggle buttons populated by JavaScript -->
             </div>
         </div>
-        <div id="debug-info" style="background: var(--bg-primary); padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace; font-size: 12px; border: 1px solid var(--border-color);">
-            <strong>Debug Info:</strong>
-            <div id="debug-content">Loading...</div>
+        <div id="debug-info-container" style="background: var(--bg-primary); padding: 10px; margin: 10px 0; border-radius: 5px; border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDebugInfo()">
+                <strong style="color: var(--text-primary);">Debug Info</strong>
+                <button id="debug-toggle-btn" style="background: none; border: none; font-size: 1.2em; color: var(--text-primary); cursor: pointer; padding: 0 5px;">▼</button>
+            </div>
+            <div id="debug-content" style="font-family: monospace; font-size: 12px; margin-top: 8px; display: none;">Loading...</div>
         </div>
     </div>
     <!-- Main content -->
     <div style="flex: 1; min-width: 0;">
         <div id="charts-container" style="padding: 24px 0 24px 0;">
-            <div id="overview-chart" style="margin: 20px 0;"></div>
-            <div id="comparison-chart" style="margin: 20px 0;"></div>
+            <div id="overview-charts-area" style="margin: 20px 0;"></div> <!-- Container for multiple overview charts -->
+            <div id="comparison-chart" style="margin: 20px 0;"></div> <!-- REMOVED -->
             <div id="trends-chart" style="margin: 20px 0;"></div>
             <div id="summary-stats" style="margin: 20px 0; padding: 20px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);"></div>
         </div>
     </div>
 </div>
 
-<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-<script>
-  console.log("Starting data injection...");
-  
-  // Pass data from Python to JavaScript with explicit logging
-  try {{
-    window.rawData = {json.dumps(js_data_for_script, default=str)};
-    window.availablePeriods = {json.dumps(available_periods)};
-    window.availableMetrics = {json.dumps(available_metrics)};
-    
-    console.log("Data injection successful");
-    console.log("Raw data length:", window.rawData?.length);
-    console.log("Available periods:", window.availablePeriods);
-    console.log("Available metrics:", window.availableMetrics);
-  }} catch(e) {{
-    console.error("Data injection failed:", e);
-  }}
-</script>
+<script src="{local_plotly_js_file}"></script> 
+{script_data_injection}
 <script src="dashboard_script.js"></script>
 
 <style>
@@ -276,7 +387,7 @@ display(HTML(dashboard_html))
 """
     
     # Save the dashboard file to project root
-    dashboard_path = get_output_path('..', "dashboard.qmd")
+    dashboard_path = os.path.join(project_root_dir, "dashboard.qmd") # Ensure dashboard.qmd is also saved here
     with open(dashboard_path, "w", encoding="utf-8") as f:
         f.write(dashboard_content)
     print(f"✓ Created dashboard.qmd at: {dashboard_path}")

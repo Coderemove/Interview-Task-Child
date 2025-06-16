@@ -251,14 +251,73 @@ function getSelectedMetrics() {
     return selected;
 }
 
+// Function to toggle debug info visibility
+function toggleDebugInfo() {
+    const content = document.getElementById('debug-content');
+    const button = document.getElementById('debug-toggle-btn');
+    if (content && button) {
+        if (content.style.display === 'none' || content.style.display === '') {
+            content.style.display = 'block';
+            button.textContent = '▲';
+        } else {
+            content.style.display = 'none';
+            button.textContent = '▼';
+        }
+    }
+}
+
 // Helper: Ensure chart divs always exist
 function ensureChartDivs() {
     const chartsContainer = document.getElementById('charts-container');
-    if (!chartsContainer) return;
-    if (!document.getElementById('overview-chart')) {
-        chartsContainer.innerHTML = `
-            <div id="overview-chart" style="margin: 20px 0;"></div>
-            <div id="comparison-chart" style="margin: 20px 0;"></div>
+    if (!chartsContainer) {
+        console.error("CRITICAL: charts-container not found in ensureChartDivs. Charts cannot be drawn.");
+        // Attempt to create charts-container if it's missing (though it should be in the HTML from Python)
+        const mainContentArea = document.querySelector('div[style*="flex: 1"]'); // A bit fragile selector
+        if (mainContentArea && !document.getElementById('charts-container')) {
+            console.warn("charts-container was missing, attempting to create it.");
+            const newChartsContainer = document.createElement('div');
+            newChartsContainer.id = 'charts-container';
+            newChartsContainer.style.padding = "24px 0 24px 0";
+            mainContentArea.appendChild(newChartsContainer);
+        } else if (!mainContentArea) {
+             console.error("Main content area for charts-container also not found.");
+        }
+    }
+
+    // Re-fetch container in case it was just created
+    const currentChartsContainer = document.getElementById('charts-container');
+    if (!currentChartsContainer) return; // If still not found, exit
+
+    // Ensure specific chart areas exist
+    if (!document.getElementById('overview-charts-area')) {
+        const overviewArea = document.createElement('div');
+        overviewArea.id = 'overview-charts-area';
+        overviewArea.style.margin = "20px 0";
+        currentChartsContainer.appendChild(overviewArea);
+    }
+    // REMOVE comparison-chart creation
+    if (!document.getElementById('trends-chart')) {
+        const trendsArea = document.createElement('div');
+        trendsArea.id = 'trends-chart';
+        trendsArea.style.margin = "20px 0";
+        currentChartsContainer.appendChild(trendsArea);
+    }
+    if (!document.getElementById('summary-stats')) {
+        const summaryArea = document.createElement('div');
+        summaryArea.id = 'summary-stats';
+        summaryArea.style.cssText = "margin: 20px 0; padding: 20px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);";
+        currentChartsContainer.appendChild(summaryArea);
+    }
+     // If the main structure was missing, we might need to re-order or ensure they are in the right place.
+    // For simplicity, this assumes charts-container exists and we are just ensuring its children.
+    // A more robust way would be to clear charts-container and rebuild if any are missing.
+    // For now, let's refine the check:
+    if (!document.getElementById('overview-charts-area') ||
+        !document.getElementById('trends-chart') ||
+        !document.getElementById('summary-stats')) {
+        console.log("Recreating chart areas in ensureChartDivs as one or more were missing.");
+        currentChartsContainer.innerHTML = `
+            <div id="overview-charts-area" style="margin: 20px 0;"></div>
             <div id="trends-chart" style="margin: 20px 0;"></div>
             <div id="summary-stats" style="margin: 20px 0; padding: 20px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);"></div>
         `;
@@ -267,138 +326,125 @@ function ensureChartDivs() {
 
 // Update all charts based on selected filters
 function updateCharts() {
+    console.log("updateCharts called.");
     ensureChartDivs();
+
     const selectedPeriods = getSelectedPeriods();
     const selectedMetrics = getSelectedMetrics();
 
-    const overviewDiv = document.getElementById('overview-chart');
-    const comparisonDiv = document.getElementById('comparison-chart');
+    const overviewChartsArea = document.getElementById('overview-charts-area');
+    // const comparisonDiv = document.getElementById('comparison-chart'); // REMOVED
     const trendsDiv = document.getElementById('trends-chart');
     const summaryStatsContainer = document.getElementById('summary-stats');
 
-    if (!overviewDiv || !comparisonDiv || !trendsDiv || !summaryStatsContainer) return;
+    if (!overviewChartsArea || !trendsDiv || !summaryStatsContainer) { // Adjusted check
+        console.error("One or more chart/stats areas are null in updateCharts. Aborting update.");
+        return;
+    }
+    
+    overviewChartsArea.innerHTML = ''; // Clear previous overview charts
+    // comparisonDiv.innerHTML = ''; // REMOVED
+    trendsDiv.innerHTML = '';
+    summaryStatsContainer.innerHTML = '';
 
     if (selectedPeriods.length === 0 || selectedMetrics.length === 0) {
-        overviewDiv.innerHTML = '';
-        comparisonDiv.innerHTML = '';
-        trendsDiv.innerHTML = '';
+        console.log("No periods or metrics selected. Displaying message.");
         summaryStatsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">Please select at least one time period and one metric to display charts.</p>';
         return;
     }
 
     const filteredData = data.filter(row => selectedPeriods.includes(row.MonthYear));
+    console.log("Filtered data length:", filteredData.length);
+
     if (filteredData.length === 0) {
-        overviewDiv.innerHTML = '';
-        comparisonDiv.innerHTML = '';
-        trendsDiv.innerHTML = '';
+        console.log("No data available for selected filters. Displaying message.");
         summaryStatsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No data available for the selected periods.</p>';
         return;
     }
 
-    // Clear messages
-    overviewDiv.innerHTML = '';
-    comparisonDiv.innerHTML = '';
-    trendsDiv.innerHTML = '';
-    summaryStatsContainer.innerHTML = '';
-
-    createOverviewChart(filteredData, selectedMetrics);
-    createComparisonChart(filteredData, selectedMetrics);
-    createTrendsChart(filteredData, selectedMetrics);
-    updateSummaryStats(filteredData, selectedMetrics);
+    console.log("Proceeding to create charts.");
+    try {
+        // Create individual overview chart for each selected metric
+        selectedMetrics.forEach((metric) => {
+            const chartId = `overview-chart-${metric.replace(/\s+/g, '-')}`;
+            const chartDiv = document.createElement('div');
+            chartDiv.id = chartId;
+            chartDiv.style.marginBottom = "30px"; // Add space between metric overview charts
+            overviewChartsArea.appendChild(chartDiv);
+            createSingleMetricOverviewChart(filteredData, metric, chartId);
+        });
+        
+        // createComparisonChart(filteredData, selectedMetrics); // REMOVED
+        createTrendsChart(filteredData, selectedMetrics);
+        updateSummaryStats(filteredData, selectedMetrics);
+    } catch (error) {
+        console.error("Error during chart creation process:", error);
+        summaryStatsContainer.innerHTML = `<p style="text-align: center; color: red; padding: 40px;">Error generating charts: ${error.message}</p>`;
+    }
 }
 
-// Overview: Line chart, x=MonthYear, y=metric sum per period
-function createOverviewChart(filteredData, selectedMetrics) {
+// Renamed and modified from createOverviewChart
+// Overview: Line chart for a SINGLE metric, x=MonthYear, y=metric sum per period
+function createSingleMetricOverviewChart(filteredData, metric, chartId) {
+    console.log(`Attempting to create Overview chart for METRIC: ${metric} on div ID: ${chartId}. Data rows: ${filteredData.length}`);
     const periods = Array.from(new Set(filteredData.map(row => row.MonthYear))).sort();
-    const traces = selectedMetrics.map((metric, idx) => {
-        // For each period, sum the metric
-        const y = periods.map(period =>
-            filteredData
-                .filter(row => row.MonthYear === period)
-                .reduce((sum, row) => sum + (row[metric] || 0), 0)
-        );
-        return {
-            x: periods,
-            y: y,
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: metric,
-            line: { width: 3 },
-            marker: { size: 8 }
-        };
-    });
+    
+    const yValues = periods.map(period =>
+        filteredData
+            .filter(row => row.MonthYear === period)
+            .reduce((sum, row) => sum + (row[metric] || 0), 0)
+    );
+    
+    const trace = { 
+        x: periods, 
+        y: yValues, 
+        type: 'scatter', 
+        mode: 'lines+markers', 
+        name: metric, // Name for legend, though only one trace here
+        line: { width: 3 }, 
+        marker: { size: 8 } 
+    };
+    console.log(`Overview - Metric: ${metric}, X: [${periods.join(', ')}], Y: [${yValues.join(', ')}]`);
 
     const themeColors = getThemeColors();
     const layout = {
-        title: { text: 'Monthly Metrics Overview', font: { color: themeColors.text } },
+        title: { text: `Monthly Overview: ${metric}`, font: { color: themeColors.text } }, // Dynamic title
         xaxis: { title: 'Month', color: themeColors.text, gridcolor: themeColors.grid },
         yaxis: { title: 'Value', color: themeColors.text, gridcolor: themeColors.grid },
-        height: 400,
-        plot_bgcolor: themeColors.background,
-        paper_bgcolor: themeColors.paper,
-        font: { color: themeColors.text }
+        height: 350, // Slightly smaller height if multiple charts
+        plot_bgcolor: themeColors.background, 
+        paper_bgcolor: themeColors.paper, 
+        font: { color: themeColors.text }, 
+        legend: { font: { color: themeColors.text } }
     };
-    Plotly.newPlot('overview-chart', traces, layout);
+    Plotly.newPlot(chartId, [trace], layout); // Plot to the specific chartId
+    console.log(`Overview chart for ${metric} plotting attempted on ${chartId}.`);
 }
 
-// Trends: Line chart, x=Date, y=metric value per day
+// Trends: Line chart, x=Date, y=metric value per day (remains mostly the same)
 function createTrendsChart(filteredData, selectedMetrics) {
-    // Get all unique dates in filteredData, sorted
-    const dates = Array.from(new Set(filteredData.map(row => row.Date.getTime())))
-        .sort((a, b) => a - b)
-        .map(ts => new Date(ts));
+    console.log(`Attempting to create Trends chart. Data rows: ${filteredData.length}, Metrics: ${selectedMetrics.join(', ')}`);
+    const sortedData = [...filteredData].sort((a, b) => a.Date.getTime() - b.Date.getTime());
 
-    const traces = selectedMetrics.map((metric, idx) => {
-        // For each date, get the metric value (or 0 if missing)
-        const y = dates.map(date => {
-            const row = filteredData.find(r => r.Date.getTime() === date.getTime());
-            return row ? row[metric] : 0;
-        });
-        return {
-            x: dates,
-            y: y,
-            type: 'scatter',
-            mode: 'lines+markers',
-            name: metric,
-            line: { width: 2 },
-            marker: { size: 6 }
-        };
+    const traces = selectedMetrics.map((metric) => {
+        const xValues = sortedData.map(row => row.Date);
+        const yValues = sortedData.map(row => row[metric] || 0);
+        // Log only a sample if data is large
+        const xSample = xValues.slice(0,5).map(d => d.toISOString().split('T')[0]).join(', ');
+        const ySample = yValues.slice(0,5).join(', ');
+        console.log(`Trends - Metric: ${metric}, X (sample): [${xSample}...], Y (sample): [${ySample}...]`);
+        return { x: xValues, y: yValues, type: 'scatter', mode: 'lines+markers', name: metric, line: { width: 2 }, marker: { size: 6 } };
     });
 
     const themeColors = getThemeColors();
     const layout = {
         title: { text: 'Daily Trends', font: { color: themeColors.text } },
-        xaxis: { title: 'Date', color: themeColors.text, gridcolor: themeColors.grid, type: 'date' },
+        xaxis: { title: 'Date', type: 'date', color: themeColors.text, gridcolor: themeColors.grid },
         yaxis: { title: 'Value', color: themeColors.text, gridcolor: themeColors.grid },
-        height: 400,
-        plot_bgcolor: themeColors.background,
-        paper_bgcolor: themeColors.paper,
-        font: { color: themeColors.text }
+        height: 400, plot_bgcolor: themeColors.background, paper_bgcolor: themeColors.paper, font: { color: themeColors.text }, legend: { font: { color: themeColors.text } }
     };
     Plotly.newPlot('trends-chart', traces, layout);
-}
-
-// Comparison: Bar chart, x=metric, y=sum over selected periods
-function createComparisonChart(filteredData, selectedMetrics) {
-    const y = selectedMetrics.map(metric =>
-        filteredData.reduce((sum, row) => sum + (row[metric] || 0), 0)
-    );
-    const trace = {
-        x: selectedMetrics,
-        y: y,
-        type: 'bar'
-    };
-    const themeColors = getThemeColors();
-    const layout = {
-        title: { text: 'Metrics Comparison (Selected Periods)', font: { color: themeColors.text } },
-        xaxis: { title: 'Metrics', color: themeColors.text, gridcolor: themeColors.grid },
-        yaxis: { title: 'Total Count', color: themeColors.text, gridcolor: themeColors.grid },
-        height: 400,
-        plot_bgcolor: themeColors.background,
-        paper_bgcolor: themeColors.paper,
-        font: { color: themeColors.text }
-    };
-    Plotly.newPlot('comparison-chart', [trace], layout);
+    console.log("Trends chart plotting attempted.");
 }
 
 // Update summary statistics
@@ -488,124 +534,123 @@ function clearAllMetrics() {
     updateCharts();
 }
 
-function selectLastWeek() {
-    console.log('Selecting last week');
-    clearAllPeriods();
-    const today = new Date();
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0); 
-    today.setHours(23, 59, 59, 999); 
-
-    const relevantPeriods = new Set();
-    data.forEach(row => { 
-        if (row.Date >= sevenDaysAgo && row.Date <= today) {
-            relevantPeriods.add(row.MonthYear);
-        }
-    });
-    
-    relevantPeriods.forEach(period => {
-        const checkbox = document.getElementById(`period-${period}`);
-        if (checkbox) checkbox.checked = true;
-    });
-    updateCharts();
-}
-
-function selectLastMonth() {
-    console.log('Selecting last month');
-    clearAllPeriods();
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
-    today.setHours(23, 59, 59, 999);
-
-    const relevantPeriods = new Set();
-    data.forEach(row => {
-        if (row.Date >= thirtyDaysAgo && row.Date <= today) {
-            relevantPeriods.add(row.MonthYear);
-        }
-    });
-    
-    relevantPeriods.forEach(period => {
-        const checkbox = document.getElementById(`period-${period}`);
-        if (checkbox) checkbox.checked = true;
-    });
-    updateCharts();
-}
-
-function selectCurrentMonth() {
-    console.log('Selecting current month');
-    clearAllPeriods();
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
-
-    const relevantPeriods = new Set();
-    data.forEach(row => {
-        if (row.Date.getFullYear() === currentYear && row.Date.getMonth() === currentMonth) {
-            relevantPeriods.add(row.MonthYear);
-        }
-    });
-
-    if (relevantPeriods.size === 0) {
-        // Fallback to most recent period if current month has no data
-        const allPeriods = new Set();
-        data.forEach(row => allPeriods.add(row.MonthYear));
-        const sortedPeriods = Array.from(allPeriods).sort();
-        if (sortedPeriods.length > 0) {
-            const mostRecentPeriod = sortedPeriods[sortedPeriods.length - 1];
-            const checkbox = document.getElementById(`period-${mostRecentPeriod}`);
-            if (checkbox) checkbox.checked = true;
-        }
-    } else {
-        relevantPeriods.forEach(period => {
-            const checkbox = document.getElementById(`period-${period}`);
-            if (checkbox) checkbox.checked = true;
-        });
-    }
-    updateCharts();
-}
-
 // Main initialization function with improved error handling
 function robustInitializeDashboard(attempt = 0) {
-    // Wait for all required DOM elements to exist
+    console.log(`robustInitializeDashboard attempt: ${attempt}`);
+    const MAX_PLOTLY_ATTEMPTS = 150; // Increased to 15 seconds (150 * 100ms)
+    const MAX_DOM_ATTEMPTS = MAX_PLOTLY_ATTEMPTS + 30; // Allow additional 3 seconds for DOM after Plotly
+
+    // STEP 1: Check if Plotly is loaded
+    if (typeof Plotly === 'undefined') {
+        if (attempt === 0) { // Log this only on the first attempt for Plotly
+            console.warn("Plotly.js is not yet defined. Waiting for it to load from CDN...");
+            // Check if the Plotly script tag exists
+            const plotlyScriptTag = document.querySelector('script[src*="cdn.plot.ly"]');
+            if (!plotlyScriptTag) {
+                console.error("CRITICAL: The Plotly.js script tag (<script src='https://cdn.plot.ly/plotly-latest.min.js'></script>) was NOT FOUND in the HTML. This is likely an issue in dashboardgeneration.py or the HTML structure.");
+            } else {
+                console.log("Plotly.js script tag found in HTML. Waiting for it to execute...");
+            }
+        }
+
+        if (attempt < MAX_PLOTLY_ATTEMPTS) {
+            setTimeout(() => robustInitializeDashboard(attempt + 1), 100);
+        } else {
+            console.error(`CRITICAL: Plotly.js failed to load after ${MAX_PLOTLY_ATTEMPTS * 100 / 1000} seconds.`);
+            const summaryStatsContainer = document.getElementById('summary-stats');
+            let errorMessage = `
+                <p style="text-align: center; color: red; padding: 20px; border: 1px solid red; background-color: #ffebee;">
+                    <strong>Critical Error: Plotly.js library did not load. Charts cannot be displayed.</strong><br><br>
+                    This usually means the browser could not download Plotly from its CDN (<code>https://cdn.plot.ly/plotly-latest.min.js</code>).<br><br>
+                    <strong>Please try the following:</strong><br>
+                    1. Check your internet connection.<br>
+                    2. Open your browser's Developer Tools (usually F12), go to the "Network" tab, and refresh the page. Look for <code>plotly-latest.min.js</code>. If it's red or has an error status (like 404, 0, or CORS error), that's the issue.<br>
+                    3. Disable browser extensions (especially ad-blockers or privacy tools) and try again.<br>
+                    4. Try a different web browser.
+                </p>`;
+            
+            if (summaryStatsContainer) {
+                summaryStatsContainer.innerHTML = errorMessage;
+            } else if (document.getElementById('charts-container')) {
+                document.getElementById('charts-container').innerHTML = errorMessage;
+            } else {
+                 document.body.innerHTML = `<div style="padding:20px;">${errorMessage}</div>` + (document.body.innerHTML || "");
+            }
+        }
+        return; // Exit and retry for Plotly
+    }
+    
+    if (attempt < MAX_PLOTLY_ATTEMPTS && attempt > 0 && typeof Plotly !== 'undefined') {
+      console.log(`Plotly.js successfully loaded after ${attempt * 100 / 1000} seconds.`);
+    } else if (attempt === 0 && typeof Plotly !== 'undefined') {
+      console.log('Plotly.js was already loaded on first check.');
+    }
+
+
+    // STEP 2: Check for required DOM elements (as before)
+    ensureChartDivs(); 
+
     const requiredElements = [
-        'period-checkboxes',
-        'metric-buttons',
-        'charts-container',
-        'summary-stats',
-        'debug-content'
+        'period-checkboxes', 'metric-buttons',
+        'charts-container', 
+        'overview-charts-area', // CHANGED from 'overview-chart'
+        // 'comparison-chart', // REMOVED
+        'trends-chart', 'summary-stats', 
+        'debug-content' // Keep this for the content div itself
     ];
     const missing = requiredElements.filter(id => !document.getElementById(id));
+
     if (missing.length > 0) {
-        if (attempt < 30) { // Try for up to ~3 seconds
+        console.log('Missing DOM elements:', missing, `Attempt: ${attempt}`);
+        if (attempt < MAX_DOM_ATTEMPTS) { 
             setTimeout(() => robustInitializeDashboard(attempt + 1), 100);
         } else {
             console.error('Failed to find required DOM elements after multiple attempts:', missing);
+            const summaryStatsContainer = document.getElementById('summary-stats');
+            const domErrorMessage = `<p style="text-align: center; color: red; padding: 40px;">Critical Error: Dashboard DOM elements missing: ${missing.join(', ')}. Cannot initialize.</p>`;
+            if (summaryStatsContainer) {
+                 summaryStatsContainer.innerHTML = domErrorMessage;
+            } else if (document.getElementById('charts-container')) {
+                document.getElementById('charts-container').innerHTML = domErrorMessage;
+            } else {
+                document.body.innerHTML = `<h1>${domErrorMessage}</h1>` + (document.body.innerHTML || "");
+            }
         }
-        return;
+        return; // Exit and retry for DOM elements
     }
 
-    // Now safe to initialize everything
-    updateDebugInfo();
+    console.log('All required DOM elements found for robustInitializeDashboard.');
+    updateDebugInfo(); 
     loadTheme();
     initializePeriodSlicer();
     initializeMetricSelector();
-    ensureChartDivs();
-    updateCharts();
-    console.log('Dashboard initialized after', attempt, 'attempts');
+    updateCharts(); 
+    console.log('Dashboard initialized successfully after a total of', attempt, 'attempts for Plotly/DOM.');
 }
 
+// Initial call to start the process
 robustInitializeDashboard();
 
-// Additional fallback
+// Fallback: This checks after a longer delay.
+// The main robustInitializeDashboard should handle most cases.
+// This is a last-ditch effort.
 setTimeout(() => {
-    if (!document.getElementById('period-checkboxes')?.children.length) {
-        console.log('Elements still not initialized, trying again...');
-        initializeDashboard();
+    const overviewChart = document.getElementById('overview-chart');
+    const summaryStats = document.getElementById('summary-stats');
+    let isInitialized = false;
+    if (overviewChart && overviewChart.querySelector('.plot-container')) { // Check if a Plotly chart is rendered
+        isInitialized = true;
+    } else if (summaryStats && summaryStats.innerHTML.trim() !== '' && !summaryStats.innerHTML.includes("Loading...")) {
+        // If summary stats has content (like a message or actual stats) and it's not the initial loading message
+        isInitialized = true;
     }
-}, 500);
 
-console.log('Period checkboxes:', document.getElementById('period-checkboxes').innerHTML);
-console.log('Metric buttons:', document.getElementById('metric-buttons').innerHTML);
+
+    if (typeof Plotly !== 'undefined' && !isInitialized) {
+        console.warn('Fallback (2000ms): Plotly loaded but dashboard might not be fully initialized. Forcing one more robustInitializeDashboard call.');
+        robustInitializeDashboard();
+    } else if (typeof Plotly === 'undefined') {
+        console.warn('Fallback (2000ms): Plotly still not defined. Forcing one more robustInitializeDashboard call to show error if needed.');
+        robustInitializeDashboard(); 
+    }
+}, 2000); // Increased delay for this final fallback check
