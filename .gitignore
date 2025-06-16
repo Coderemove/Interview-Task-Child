@@ -9,4 +9,4 @@ graphs/
 scripts/__pycache__
 path_config.json
 app.py
-plotly_config.json
+plotly-3.0.1.min.js
